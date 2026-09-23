@@ -8,7 +8,6 @@ import com.local.clicker.domain.DraftWait
 import com.local.clicker.domain.ExecutionSnapshot
 import com.local.clicker.domain.NAME_MAX
 import com.local.clicker.domain.OpenAppStep
-import com.local.clicker.domain.OpenAppStep
 import com.local.clicker.domain.SaveResult
 import com.local.clicker.domain.Step
 import com.local.clicker.domain.StepKind
@@ -43,7 +42,7 @@ class RoomTaskRepository(
                     status = task.status.toStatus(),
                     updatedAt = task.updatedAt,
                     lastMessage = task.lastMessage,
-                    executable = rows.isExecutable(packageManager),
+                    executable = rows.arePersistedStepsExecutable(packageManager),
                 )
             }
         }
@@ -79,7 +78,7 @@ class RoomTaskRepository(
             return SaveResult.Rejected("计划时间必须是将来的时间", existing?.scheduledAt)
         }
 
-        val executable = steps.isExecutable(packageManager)
+        val executable = steps.areDraftStepsExecutable(packageManager)
         val status = when {
             executable && scheduledAt != null && allowSchedule -> TaskStatus.SCHEDULED
             else -> TaskStatus.DRAFT
@@ -263,9 +262,11 @@ private fun StepEntity.toStep(): Step? {
         StepKind.OPEN_APP -> packageName?.takeIf { it.isNotBlank() }?.let {
             OpenAppStep(id, orderIndex, it)
         }
+
         StepKind.WAIT -> waitMs?.takeIf { it in WAIT_MIN_MS..WAIT_MAX_MS }?.let {
             WaitStep(id, orderIndex, it)
         }
+
         StepKind.TAP -> {
             if (x == null || y == null || screenWidth == null || screenHeight == null || rotation == null) {
                 null
@@ -294,6 +295,7 @@ private fun DraftStep.toEntity(taskId: Long): StepEntity {
             screenHeight = null,
             rotation = null,
         )
+
         is DraftWait -> StepEntity(
             id = persistedId,
             taskId = taskId,
@@ -308,6 +310,7 @@ private fun DraftStep.toEntity(taskId: Long): StepEntity {
             screenHeight = null,
             rotation = null,
         )
+
         is DraftTap -> StepEntity(
             id = persistedId,
             taskId = taskId,
@@ -325,7 +328,7 @@ private fun DraftStep.toEntity(taskId: Long): StepEntity {
     }
 }
 
-private fun List<StepEntity>.isExecutable(packageManager: PackageManager): Boolean {
+private fun List<StepEntity>.arePersistedStepsExecutable(packageManager: PackageManager): Boolean {
     if (isEmpty() || size > com.local.clicker.domain.MAX_STEPS) return false
     return all { row ->
         when (val step = row.toStep()) {
@@ -336,7 +339,7 @@ private fun List<StepEntity>.isExecutable(packageManager: PackageManager): Boole
     }
 }
 
-private fun List<DraftStep>.isExecutable(packageManager: PackageManager): Boolean {
+private fun List<DraftStep>.areDraftStepsExecutable(packageManager: PackageManager): Boolean {
     if (isEmpty() || size > com.local.clicker.domain.MAX_STEPS) return false
     return all { step ->
         when (step) {
@@ -344,6 +347,7 @@ private fun List<DraftStep>.isExecutable(packageManager: PackageManager): Boolea
                 val pkg = step.packageName
                 step.isComplete() && pkg != null && packageManager.getLaunchIntentForPackage(pkg) != null
             }
+
             is DraftWait -> step.isComplete()
             is DraftTap -> step.isComplete()
         }

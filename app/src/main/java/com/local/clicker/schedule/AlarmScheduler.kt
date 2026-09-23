@@ -8,6 +8,7 @@ import android.content.Intent
 import com.local.clicker.ClickerApp
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.ui.MainActivity
+import kotlinx.coroutines.launch
 
 class AlarmScheduler(private val context: Context) {
     private val alarmManager = context.getSystemService(AlarmManager::class.java)
