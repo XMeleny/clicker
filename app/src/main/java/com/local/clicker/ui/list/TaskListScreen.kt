@@ -1,0 +1,169 @@
+package com.local.clicker.ui.list
+
+import android.app.Application
+import android.content.Intent
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.local.clicker.ClickerApp
+import com.local.clicker.domain.TaskStatus
+import com.local.clicker.domain.TaskSummary
+import com.local.clicker.domain.isTerminal
+import com.local.clicker.exec.ClickerRuntimeService
+import com.local.clicker.ui.edit.formatWhen
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+class TaskListViewModel(app: Application) : AndroidViewModel(app) {
+    private val graph = (app as ClickerApp).graph
+    val tasks = combine(graph.repository.observeTasks(), graph.reconciler.showBootBanner) { list, banner ->
+        ListUi(list, banner)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ListUi(emptyList(), false))
+
+    private val busy = ClickerRuntimeService.busy
+
+    fun isBusy(): Boolean = busy.value
+
+    fun runNow(id: Long) {
+        val context = getApplication<Application>()
+        context.startForegroundService(
+            ClickerRuntimeService.runIntent(context, id, ClickerRuntimeService.SOURCE_MANUAL),
+        )
+    }
+
+    fun cancel(id: Long) {
+        viewModelScope.launch { graph.coordinator.cancelSchedule(id) }
+    }
+
+    fun delete(id: Long) {
+        viewModelScope.launch { graph.coordinator.delete(id) }
+    }
+
+    fun copy(id: Long, onCopied: (Long) -> Unit) {
+        viewModelScope.launch {
+            val newId = graph.repository.copyAsNew(id, System.currentTimeMillis())
+            if (newId != null) onCopied(newId)
+        }
+    }
+}
+
+data class ListUi(val tasks: List<TaskSummary>, val bootBanner: Boolean)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TaskListScreen(onOpen: (Long) -> Unit, onCreate: () -> Unit) {
+    val vm: TaskListViewModel = viewModel()
+    val ui by vm.tasks.collectAsState()
+    val busy by ClickerRuntimeService.busy.collectAsState()
+    var pendingDelete by remember { mutableStateOf<Long?>(null) }
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("点击器") }) },
+        floatingActionButton = { FloatingActionButton(onClick = onCreate) { Text("新建") } },
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (ui.bootBanner) {
+                item {
+                    Text("计划可能在重启后丢失，请检查自启动。打开本应用后，仍在未来的计划会重新登记。")
+                }
+            }
+            items(ui.tasks, key = { it.id }) { task ->
+                TaskRow(
+                    task = task,
+                    busy = busy,
+                    onOpen = { onOpen(task.id) },
+                    onRun = { vm.runNow(task.id) },
+                    onCancel = { vm.cancel(task.id) },
+                    onDelete = { pendingDelete = task.id },
+                    onCopy = { vm.copy(task.id, onOpen) },
+                )
+            }
+        }
+    }
+    pendingDelete?.let { id ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("删除任务") },
+            text = { Text("删除后闹钟也会取消。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.delete(id)
+                    pendingDelete = null
+                }) { Text("删除") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("留下") } },
+        )
+    }
+}
+
+@Composable
+private fun TaskRow(
+    task: TaskSummary,
+    busy: Boolean,
+    onOpen: () -> Unit,
+    onRun: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit,
+    onCopy: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(task.name, style = MaterialTheme.typography.titleMedium)
+            Text(statusLabel(task.status) + " · " + (task.scheduledAt?.let(::formatWhen) ?: "仅手动"))
+            task.lastMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val canRun = task.executable &&
+                    (task.status == TaskStatus.DRAFT || task.status == TaskStatus.SCHEDULED) &&
+                    !busy
+                if (canRun) Button(onClick = onRun) { Text("立即执行") }
+                if (task.status == TaskStatus.SCHEDULED) TextButton(onClick = onCancel) { Text("取消计划") }
+                if (task.status.isTerminal()) TextButton(onClick = onCopy) { Text("复制为新任务") }
+                if (task.status != TaskStatus.RUNNING) TextButton(onClick = onDelete) { Text("删除") }
+            }
+        }
+    }
+}
+
+fun statusLabel(status: TaskStatus): String = when (status) {
+    TaskStatus.DRAFT -> "草稿"
+    TaskStatus.SCHEDULED -> "已计划"
+    TaskStatus.RUNNING -> "执行中"
+    TaskStatus.SUCCESS -> "成功"
+    TaskStatus.FAILED -> "失败"
+    TaskStatus.MISSED -> "错过"
+    TaskStatus.CANCELLED -> "已取消"
+}

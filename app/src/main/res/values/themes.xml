@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.Clicker" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Clicker.Wake" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+    <color name="ic_launcher_background">#1F6FEB</color>
+</resources>
