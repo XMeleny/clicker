@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.local.clicker.ui.AppTitleBar
 
 @Composable
 fun PermissionScreen(
@@ -25,15 +26,19 @@ fun PermissionScreen(
     onAlarms: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize(),
     ) {
-        Text("权限", style = MaterialTheme.typography.headlineSmall)
-        PermissionSwitch("通知", gate.notifications, onNotifications)
-        HorizontalDivider()
-        PermissionSwitch("无障碍", gate.accessibility, onAccessibility)
-        HorizontalDivider()
-        PermissionSwitch("闹钟和提醒", gate.alarms, onAlarms)
+        AppTitleBar(title = "权限")
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            PermissionSwitch("通知", gate.notifications, onNotifications)
+            HorizontalDivider()
+            PermissionSwitch("无障碍", gate.accessibility, onAccessibility)
+            HorizontalDivider()
+            PermissionSwitch("闹钟和提醒", gate.alarms, onAlarms)
+        }
     }
 }
 

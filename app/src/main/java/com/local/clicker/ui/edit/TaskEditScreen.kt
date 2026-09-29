@@ -26,7 +26,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -56,6 +55,8 @@ import com.local.clicker.domain.WAIT_MAX_MS
 import com.local.clicker.domain.WAIT_MIN_MS
 import com.local.clicker.domain.isTerminal
 import com.local.clicker.exec.ClickerRuntimeService
+import com.local.clicker.ui.AppTitleBar
+import com.local.clicker.ui.TitleBarAction
 import com.local.clicker.ui.list.statusLabel
 import com.local.clicker.ui.theme.ClickerTheme
 import java.time.Instant
@@ -131,14 +132,10 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, onBack: () -> Unit, actio
     var pickingApp by remember { mutableStateOf<Long?>(null) }
     var showDate by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(if (ui.taskId == 0L) "新任务" else ui.name.ifBlank { "任务" }) },
-            navigationIcon = { TextButton(onClick = onBack) { Text("返回") } },
-            actions = {
-                if (!ui.readOnly) {
-                    TextButton(onClick = actions.save) { Text("保存") }
-                }
-            },
+        AppTitleBar(
+            title = if (ui.taskId == 0L) "新任务" else ui.name.ifBlank { "任务" },
+            onBack = onBack,
+            action = if (ui.readOnly) null else TitleBarAction("保存", actions.save),
         )
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(16.dp),

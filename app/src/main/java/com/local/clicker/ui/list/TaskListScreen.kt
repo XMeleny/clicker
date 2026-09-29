@@ -15,13 +15,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,6 +32,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.local.clicker.ClickerApp
+import com.local.clicker.ui.AppTitleBar
+import com.local.clicker.ui.TitleBarAction
 import com.local.clicker.domain.TaskStatus
 import com.local.clicker.domain.TaskSummary
 import com.local.clicker.domain.isTerminal
@@ -81,7 +80,6 @@ class TaskListViewModel(app: Application) : AndroidViewModel(app) {
 
 data class ListUi(val tasks: List<TaskSummary>, val bootBanner: Boolean)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskListScreen(onOpen: (Long) -> Unit, onCreate: () -> Unit) {
     val vm: TaskListViewModel = viewModel()
@@ -99,7 +97,6 @@ fun TaskListScreen(onOpen: (Long) -> Unit, onCreate: () -> Unit) {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TaskListContent(
     ui: ListUi,
@@ -113,8 +110,7 @@ internal fun TaskListContent(
 ) {
     var pendingDelete by remember { mutableStateOf<Long?>(null) }
     Scaffold(
-        topBar = { TopAppBar(title = { Text("点击器") }) },
-        floatingActionButton = { FloatingActionButton(onClick = onCreate) { Text("新建") } },
+        topBar = { AppTitleBar(title = "点击器", action = TitleBarAction("新建", onCreate)) },
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
