@@ -83,7 +83,6 @@ fun TaskEditScreen(taskId: Long, onBack: () -> Unit, onReplaced: (Long) -> Unit)
     TaskEditContent(
         ui = ui,
         busy = busy,
-        onBack = onBack,
         actions = EditActions(
             save = { vm.save(onBack, onReplaced) },
             setName = vm::setName,
@@ -126,7 +125,7 @@ private data class EditActions(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TaskEditContent(ui: EditUi, busy: Boolean, onBack: () -> Unit, actions: EditActions) {
+private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
     var kindTarget by remember { mutableStateOf<KindTarget?>(null) }
     var changeTarget by remember { mutableStateOf<Int?>(null) }
     var pickingApp by remember { mutableStateOf<Long?>(null) }
@@ -134,7 +133,6 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, onBack: () -> Unit, actio
     Column(Modifier.fillMaxSize()) {
         AppTitleBar(
             title = if (ui.taskId == 0L) "新任务" else ui.name.ifBlank { "任务" },
-            onBack = onBack,
             action = if (ui.readOnly) null else TitleBarAction("保存", actions.save),
         )
         Column(
@@ -293,7 +291,6 @@ private fun TaskEditScreenPreview() {
                 expandedKey = 2,
             ),
             busy = false,
-            onBack = {},
             actions = sampleActions,
         )
     }
