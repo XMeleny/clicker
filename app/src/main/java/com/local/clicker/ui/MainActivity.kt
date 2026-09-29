@@ -146,7 +146,6 @@ private fun MainActivityPreview() {
                     onRun = {},
                     onCancel = {},
                     onDelete = {},
-                    onCopy = {},
                 )
             }
             MainTabs(0, {})

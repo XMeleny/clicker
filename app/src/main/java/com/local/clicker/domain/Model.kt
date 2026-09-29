@@ -122,6 +122,7 @@ data class TaskSummary(
     val updatedAt: Long,
     val lastMessage: String?,
     val executable: Boolean,
+    val steps: List<String> = emptyList(),
 )
 
 data class ExecutionLog(

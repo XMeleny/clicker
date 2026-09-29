@@ -29,7 +29,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,7 +53,6 @@ import com.local.clicker.domain.TaskStatus
 import com.local.clicker.domain.TapPoint
 import com.local.clicker.domain.WAIT_MAX_MS
 import com.local.clicker.domain.WAIT_MIN_MS
-import com.local.clicker.domain.isTerminal
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.ui.AppTitleBar
 import com.local.clicker.ui.TitleBarAction
@@ -67,21 +65,18 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskEditScreen(taskId: Long, isNew: Boolean, onBack: () -> Unit, onReserved: (Long) -> Unit, onReplaced: (Long) -> Unit) {
+fun TaskEditScreen(taskId: Long, onBack: () -> Unit, onReplaced: (Long) -> Unit) {
     val context = LocalContext.current
     val vm: TaskEditViewModel = viewModel(
-        key = if (isNew) "edit-new" else "edit-$taskId",
+        key = "edit-$taskId",
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return TaskEditViewModel(context.applicationContext as android.app.Application, taskId, isNew) as T
+                return TaskEditViewModel(context.applicationContext as android.app.Application, taskId) as T
             }
         },
     )
     val ui by vm.ui.collectAsState()
-    LaunchedEffect(ui.taskId, isNew) {
-        if (isNew && taskId == 0L && ui.taskId > 0L) onReserved(ui.taskId)
-    }
     if (!ui.loaded) return
     val busy by ClickerRuntimeService.busy.collectAsState()
     TaskEditContent(
@@ -103,7 +98,6 @@ fun TaskEditScreen(taskId: Long, isNew: Boolean, onBack: () -> Unit, onReserved:
             changeType = vm::changeType,
             runNow = { vm.runNow(onReplaced) },
             cancelSchedule = { vm.cancelSchedule(onBack) },
-            copy = { vm.copy(onReplaced) },
         ),
     )
 }
@@ -124,7 +118,6 @@ private data class EditActions(
     val changeType: (Int, StepKind) -> Unit,
     val runNow: () -> Unit,
     val cancelSchedule: () -> Unit,
-    val copy: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -199,9 +192,6 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             }
             if (ui.status == TaskStatus.SCHEDULED) {
                 TextButton(onClick = actions.cancelSchedule) { Text("取消计划") }
-            }
-            if (ui.status.isTerminal()) {
-                TextButton(onClick = actions.copy) { Text("复制为新任务") }
             }
         }
     }
@@ -278,7 +268,6 @@ private fun TaskEditScreenPreview() {
         changeType = { _, _ -> },
         runNow = {},
         cancelSchedule = {},
-        copy = {},
     )
     ClickerTheme {
         TaskEditContent(

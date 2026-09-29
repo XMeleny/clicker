@@ -47,6 +47,7 @@ class RoomTaskRepository(
                     updatedAt = task.updatedAt,
                     lastMessage = task.lastMessage,
                     executable = rows.arePersistedStepsExecutable(packageManager),
+                    steps = rows.map { it.summary(packageManager) },
                 )
             }
         }
@@ -58,8 +59,6 @@ class RoomTaskRepository(
         val task = dao.getTask(id) ?: return null
         return TaskDraft(task.toRecord(), dao.stepsOf(id).map { it.toDraft() })
     }
-
-    override suspend fun reserveTaskId(): Long = dao.reserveTaskId()
 
     override suspend fun save(
         id: Long?,
@@ -74,10 +73,7 @@ class RoomTaskRepository(
             return SaveResult.Rejected("请填写 1～40 个字符的名称", null)
         }
         val existing = id?.let { dao.getTask(it) }
-        if (existing != null && existing.status.toStatus().let {
-                it == TaskStatus.RUNNING || it.isTerminalStatus()
-            }
-        ) {
+        if (existing?.status == TaskStatus.RUNNING.name) {
             return SaveResult.Rejected("当前状态不能修改步骤", existing.scheduledAt)
         }
         if (scheduledAt != null && scheduledAt <= now) {
@@ -97,7 +93,6 @@ class RoomTaskRepository(
         val taskId = if (existing == null) {
             dao.insertTask(
                 TaskEntity(
-                    id = id ?: 0L,
                     name = trimmed,
                     scheduledAt = scheduledAt,
                     status = status.name,
@@ -114,7 +109,7 @@ class RoomTaskRepository(
                     scheduledAt = scheduledAt,
                     status = status.name,
                     updatedAt = now,
-                    lastMessage = notice ?: if (status == TaskStatus.SCHEDULED) null else existing.lastMessage,
+                    lastMessage = notice,
                 ),
             )
             existing.id
@@ -131,33 +126,6 @@ class RoomTaskRepository(
 
     override suspend fun delete(id: Long) {
         dao.deleteTask(id)
-    }
-
-    override suspend fun copyAsNew(id: Long, now: Long): Long? {
-        val task = dao.getTask(id) ?: return null
-        if (!task.status.toStatus().isTerminalStatus()) return null
-        val suffix = " 副本"
-        val name = if (task.name.length + suffix.length <= NAME_MAX) {
-            task.name + suffix
-        } else {
-            task.name.take(NAME_MAX - suffix.length) + suffix
-        }
-        val newId = dao.insertTask(
-            TaskEntity(
-                name = name,
-                scheduledAt = null,
-                status = TaskStatus.DRAFT.name,
-                createdAt = now,
-                updatedAt = now,
-                lastRunAt = null,
-                lastMessage = null,
-            ),
-        )
-        val copies = dao.stepsOf(id).map {
-            it.copy(id = 0, taskId = newId)
-        }
-        dao.replaceSteps(newId, copies)
-        return newId
     }
 
     override suspend fun cancelSchedule(id: Long) {
@@ -267,11 +235,6 @@ class RoomTaskRepository(
 
 private fun String.toStatus(): TaskStatus = TaskStatus.valueOf(this)
 
-private fun TaskStatus.isTerminalStatus(): Boolean = when (this) {
-    TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.MISSED, TaskStatus.CANCELLED -> true
-    else -> false
-}
-
 private fun TaskEntity.toRecord() = TaskRecord(
     id = id,
     name = name,
@@ -282,6 +245,18 @@ private fun TaskEntity.toRecord() = TaskRecord(
     lastRunAt = lastRunAt,
     lastMessage = lastMessage,
 )
+
+private fun StepEntity.summary(packageManager: PackageManager): String = when (StepKind.valueOf(type)) {
+    StepKind.OPEN_APP -> packageName?.let { pkg ->
+        val label = runCatching {
+            val app = packageManager.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0))
+            packageManager.getApplicationLabel(app).toString()
+        }.getOrDefault(pkg)
+        "打开 $label"
+    } ?: "打开应用（未选择）"
+    StepKind.WAIT -> waitMs?.let { "等待 ${it}ms" } ?: "等待（未填写）"
+    StepKind.TAP -> if (x != null && y != null) "点击 ($x, $y)" else "点击（未取点）"
+}
 
 private fun ExecutionLogEntity.toLog() = ExecutionLog(
     id = id,

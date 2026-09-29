@@ -1,7 +1,6 @@
 package com.local.clicker.ui.list
 
 import android.app.Application
-import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -22,10 +22,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
@@ -36,7 +40,6 @@ import com.local.clicker.ui.AppTitleBar
 import com.local.clicker.ui.TitleBarAction
 import com.local.clicker.domain.TaskStatus
 import com.local.clicker.domain.TaskSummary
-import com.local.clicker.domain.isTerminal
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.ui.edit.formatWhen
 import com.local.clicker.ui.theme.ClickerTheme
@@ -44,6 +47,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class TaskListViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = (app as ClickerApp).graph
@@ -70,12 +74,6 @@ class TaskListViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.coordinator.delete(id) }
     }
 
-    fun copy(id: Long, onCopied: (Long) -> Unit) {
-        viewModelScope.launch {
-            val newId = graph.repository.copyAsNew(id, System.currentTimeMillis())
-            if (newId != null) onCopied(newId)
-        }
-    }
 }
 
 data class ListUi(val tasks: List<TaskSummary>, val bootBanner: Boolean)
@@ -85,15 +83,23 @@ fun TaskListScreen(onOpen: (Long) -> Unit, onCreate: () -> Unit) {
     val vm: TaskListViewModel = viewModel()
     val ui by vm.tasks.collectAsState()
     val busy by ClickerRuntimeService.busy.collectAsState()
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(ui.tasks) {
+        while (true) {
+            val next = ui.tasks.mapNotNull { it.scheduledAt }.filter { it > now }.minOrNull()
+            delay(((next ?: now + 60_000L) - now + 1L).coerceAtLeast(1L))
+            now = System.currentTimeMillis()
+        }
+    }
     TaskListContent(
         ui = ui,
         busy = busy,
+        now = now,
         onOpen = onOpen,
         onCreate = onCreate,
         onRun = vm::runNow,
         onCancel = vm::cancel,
         onDelete = vm::delete,
-        onCopy = { id -> vm.copy(id, onOpen) },
     )
 }
 
@@ -101,12 +107,12 @@ fun TaskListScreen(onOpen: (Long) -> Unit, onCreate: () -> Unit) {
 internal fun TaskListContent(
     ui: ListUi,
     busy: Boolean,
+    now: Long = System.currentTimeMillis(),
     onOpen: (Long) -> Unit,
     onCreate: () -> Unit,
     onRun: (Long) -> Unit,
     onCancel: (Long) -> Unit,
     onDelete: (Long) -> Unit,
-    onCopy: (Long) -> Unit,
 ) {
     var pendingDelete by remember { mutableStateOf<Long?>(null) }
     Scaffold(
@@ -126,11 +132,11 @@ internal fun TaskListContent(
                 TaskRow(
                     task = task,
                     busy = busy,
+                    now = now,
                     onOpen = { onOpen(task.id) },
                     onRun = { onRun(task.id) },
                     onCancel = { onCancel(task.id) },
                     onDelete = { pendingDelete = task.id },
-                    onCopy = { onCopy(task.id) },
                 )
             }
         }
@@ -158,19 +164,19 @@ private fun TaskListScreenPreview() {
         TaskListContent(
             ui = ListUi(
                 tasks = listOf(
-                    TaskSummary(1, "早晨签到", null, TaskStatus.DRAFT, 0, null, true),
-                    TaskSummary(2, "午间提醒", 1_800_000_000_000L, TaskStatus.SCHEDULED, 0, null, true),
-                    TaskSummary(3, "上次执行", null, TaskStatus.SUCCESS, 0, "已完成", true),
+                    TaskSummary(1, "早晨签到", null, TaskStatus.DRAFT, 0, null, true, listOf("打开 日历", "等待 1000ms")),
+                    TaskSummary(2, "午间提醒", 1_800_000_000_000L, TaskStatus.SCHEDULED, 0, null, true, listOf("点击 (420, 860)")),
+                    TaskSummary(3, "上次执行", 1_700_000_000_000L, TaskStatus.SUCCESS, 0, "已完成", true, listOf("等待 500ms")),
                 ),
                 bootBanner = false,
             ),
             busy = false,
+            now = 1_750_000_000_000L,
             onOpen = {},
             onCreate = {},
             onRun = {},
             onCancel = {},
             onDelete = {},
-            onCopy = {},
         )
     }
 }
@@ -179,24 +185,35 @@ private fun TaskListScreenPreview() {
 private fun TaskRow(
     task: TaskSummary,
     busy: Boolean,
+    now: Long,
     onOpen: () -> Unit,
     onRun: () -> Unit,
     onCancel: () -> Unit,
     onDelete: () -> Unit,
-    onCopy: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+    val color = if (task.scheduledAt != null && task.scheduledAt > now) Color(0xFFE5F3E9) else Color(0xFFE9EAEC)
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = color),
+    ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(task.name, style = MaterialTheme.typography.titleMedium)
-            Text(statusLabel(task.status) + " · " + (task.scheduledAt?.let(::formatWhen) ?: "仅手动"))
-            task.lastMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Text(task.scheduledAt?.let(::formatWhen) ?: "未设置时间", style = MaterialTheme.typography.bodyMedium)
+            if (task.steps.isEmpty()) {
+                Text("暂无步骤", style = MaterialTheme.typography.bodySmall)
+            } else {
+                task.steps.forEachIndexed { index, step ->
+                    Text("${index + 1}. $step", style = MaterialTheme.typography.bodySmall)
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val canRun = task.executable &&
                     (task.status == TaskStatus.DRAFT || task.status == TaskStatus.SCHEDULED) &&
                     !busy
                 if (canRun) Button(onClick = onRun) { Text("立即执行") }
                 if (task.status == TaskStatus.SCHEDULED) TextButton(onClick = onCancel) { Text("取消计划") }
-                if (task.status.isTerminal()) TextButton(onClick = onCopy) { Text("复制为新任务") }
+                if (task.status != TaskStatus.RUNNING) TextButton(onClick = onOpen) { Text("编辑") }
                 if (task.status != TaskStatus.RUNNING) TextButton(onClick = onDelete) { Text("删除") }
             }
         }

@@ -6,11 +6,11 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.Upsert
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
@@ -98,25 +98,7 @@ interface ClickerDao {
     @Insert
     suspend fun insertTask(entity: TaskEntity): Long
 
-    @Transaction
-    suspend fun reserveTaskId(): Long {
-        // Consuming the autoincrement ID keeps unsaved tasks out of the task list.
-        val id = insertTask(
-            TaskEntity(
-                name = "",
-                scheduledAt = null,
-                status = "DRAFT",
-                createdAt = 0L,
-                updatedAt = 0L,
-                lastRunAt = null,
-                lastMessage = null,
-            ),
-        )
-        deleteTask(id)
-        return id
-    }
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertTask(entity: TaskEntity)
 
     @Insert

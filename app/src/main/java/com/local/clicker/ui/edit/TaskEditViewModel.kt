@@ -3,6 +3,7 @@ package com.local.clicker.ui.edit
 import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.local.clicker.ClickerApp
@@ -15,7 +16,6 @@ import com.local.clicker.domain.SaveResult
 import com.local.clicker.domain.ScriptEditor
 import com.local.clicker.domain.StepKind
 import com.local.clicker.domain.TaskStatus
-import com.local.clicker.domain.isTerminal
 import com.local.clicker.exec.ClickerAccessibilityService
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.exec.PickerBus
@@ -45,27 +45,22 @@ data class EditUi(
     val loaded: Boolean = false,
 )
 
-class TaskEditViewModel(app: Application, private val initialId: Long, private val isNew: Boolean) : AndroidViewModel(app) {
+class TaskEditViewModel(app: Application, private val initialId: Long) : AndroidViewModel(app) {
     private val graph = (app as ClickerApp).graph
-    private val _ui = MutableStateFlow(EditUi(taskId = initialId))
+    private val _ui = MutableStateFlow(
+        EditUi(
+            taskId = initialId,
+            name = if (initialId == 0L) "未命名" else "",
+            scheduledAt = if (initialId == 0L) todayAtNineOhFive() else null,
+        ),
+    )
     val ui = _ui.asStateFlow()
 
     init {
         viewModelScope.launch {
             val apps = loadApps()
             _ui.update { it.copy(apps = apps) }
-            if (isNew) {
-                val id = initialId.takeIf { it > 0L } ?: graph.repository.reserveTaskId()
-                val zone = ZoneId.systemDefault()
-                val todayAtNineOhFive = LocalDate.now(zone)
-                    .atTime(LocalTime.of(21, 5))
-                    .atZone(zone)
-                    .toInstant()
-                    .toEpochMilli()
-                _ui.update {
-                    it.copy(taskId = id, name = "任务$id", scheduledAt = todayAtNineOhFive, loaded = true)
-                }
-            } else if (initialId > 0L) {
+            if (initialId > 0L) {
                 graph.repository.loadDraft(initialId)?.let { draft ->
                     _ui.update {
                         it.copy(
@@ -73,7 +68,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
                             scheduledAt = draft.task.scheduledAt,
                             steps = draft.steps,
                             status = draft.task.status,
-                            readOnly = draft.task.status == TaskStatus.RUNNING || draft.task.status.isTerminal(),
+                            readOnly = draft.task.status == TaskStatus.RUNNING,
                             loaded = true,
                         )
                     }
@@ -83,13 +78,13 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
             }
         }
         viewModelScope.launch {
-            if (isNew || initialId <= 0L) return@launch
+            if (initialId <= 0L) return@launch
             graph.repository.observeTask(initialId).collect { task ->
                 if (task == null) return@collect
                 _ui.update {
                     it.copy(
                         status = task.status,
-                        readOnly = task.status == TaskStatus.RUNNING || task.status.isTerminal(),
+                        readOnly = task.status == TaskStatus.RUNNING,
                     )
                 }
             }
@@ -189,12 +184,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
                 now = System.currentTimeMillis(),
             )
             when (result) {
-                is SaveResult.Rejected -> _ui.update {
-                    it.copy(
-                        notice = result.message,
-                        scheduledAt = if (result.message.contains("计划时间")) result.revertScheduledAt else it.scheduledAt,
-                    )
-                }
+                is SaveResult.Rejected -> showRejection(result)
                 is SaveResult.Saved -> {
                     _ui.update {
                         it.copy(
@@ -206,7 +196,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
                     }
                     when {
                         result.leaveEditor -> onLeave()
-                        isNew -> onReplaced(result.taskId)
+                        state.taskId <= 0L -> onReplaced(result.taskId)
                     }
                 }
             }
@@ -236,7 +226,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
             } else {
                 _ui.update { it.copy(notice = "这一步还没完成", showInvalid = true) }
             }
-            if (isNew) onReplaced(saved.taskId)
+            if (state.taskId <= 0L) onReplaced(saved.taskId)
         }
     }
 
@@ -257,7 +247,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
                 )
             }
             if (!ready) {
-                if (isNew) onReplaced(saved.taskId)
+                if (state.taskId <= 0L) onReplaced(saved.taskId)
                 return@launch
             }
             if (saved.status != TaskStatus.DRAFT && saved.status != TaskStatus.SCHEDULED) return@launch
@@ -265,7 +255,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
             context.startForegroundService(
                 ClickerRuntimeService.runIntent(context, saved.taskId, ClickerRuntimeService.SOURCE_MANUAL),
             )
-            if (isNew) onReplaced(saved.taskId)
+            if (state.taskId <= 0L) onReplaced(saved.taskId)
         }
     }
 
@@ -279,12 +269,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
         )
         return when (result) {
             is SaveResult.Rejected -> {
-                _ui.update {
-                    it.copy(
-                        notice = result.message,
-                        scheduledAt = if (result.message.contains("计划时间")) result.revertScheduledAt else it.scheduledAt,
-                    )
-                }
+                showRejection(result)
                 null
             }
             is SaveResult.Saved -> {
@@ -294,19 +279,19 @@ class TaskEditViewModel(app: Application, private val initialId: Long, private v
         }
     }
 
+    private fun showRejection(result: SaveResult.Rejected) {
+        if (result.message == "计划时间必须是将来的时间") {
+            Toast.makeText(getApplication(), result.message, Toast.LENGTH_SHORT).show()
+        } else {
+            _ui.update { it.copy(notice = result.message) }
+        }
+    }
+
     fun cancelSchedule(onLeave: () -> Unit) {
         viewModelScope.launch {
             val id = _ui.value.taskId
             if (id > 0L) graph.coordinator.cancelSchedule(id)
             onLeave()
-        }
-    }
-
-    fun copy(onReplaced: (Long) -> Unit) {
-        viewModelScope.launch {
-            val id = _ui.value.taskId
-            val newId = graph.repository.copyAsNew(id, System.currentTimeMillis())
-            if (newId != null) onReplaced(newId)
         }
     }
 
@@ -343,4 +328,9 @@ fun DraftStep.summary(apps: List<AppOption>): String = when (this) {
 fun DraftStep.invalid(apps: List<AppOption>): Boolean = when (this) {
     is DraftOpenApp -> !isComplete() || apps.none { it.packageName == packageName }
     else -> !isComplete()
+}
+
+private fun todayAtNineOhFive(): Long {
+    val zone = ZoneId.systemDefault()
+    return LocalDate.now(zone).atTime(LocalTime.of(21, 5)).atZone(zone).toInstant().toEpochMilli()
 }

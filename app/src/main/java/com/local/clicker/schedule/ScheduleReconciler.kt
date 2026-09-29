@@ -65,7 +65,6 @@ class TaskCoordinator(
         steps: List<com.local.clicker.domain.DraftStep>,
         now: Long,
     ): com.local.clicker.domain.SaveResult {
-        if (id != null) alarms.cancel(id)
         val result = repository.save(
             id = id,
             name = name,
@@ -74,11 +73,11 @@ class TaskCoordinator(
             now = now,
             allowSchedule = alarms.canSchedule(),
         )
-        if (result is com.local.clicker.domain.SaveResult.Saved &&
-            result.status == com.local.clicker.domain.TaskStatus.SCHEDULED &&
-            result.scheduledAt != null
-        ) {
-            alarms.schedule(result.taskId, result.scheduledAt)
+        if (result is com.local.clicker.domain.SaveResult.Saved) {
+            if (id != null) alarms.cancel(id)
+            if (result.status == com.local.clicker.domain.TaskStatus.SCHEDULED && result.scheduledAt != null) {
+                alarms.schedule(result.taskId, result.scheduledAt)
+            }
         }
         return result
     }

@@ -11,8 +11,6 @@ interface TaskRepository {
 
     suspend fun loadDraft(id: Long): TaskDraft?
 
-    suspend fun reserveTaskId(): Long
-
     suspend fun save(
         id: Long?,
         name: String,
@@ -23,8 +21,6 @@ interface TaskRepository {
     ): SaveResult
 
     suspend fun delete(id: Long)
-
-    suspend fun copyAsNew(id: Long, now: Long): Long?
 
     suspend fun cancelSchedule(id: Long)
 
