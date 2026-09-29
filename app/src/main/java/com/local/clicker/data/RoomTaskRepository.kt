@@ -6,6 +6,7 @@ import com.local.clicker.domain.DraftStep
 import com.local.clicker.domain.DraftTap
 import com.local.clicker.domain.DraftWait
 import com.local.clicker.domain.ExecutionSnapshot
+import com.local.clicker.domain.ExecutionLog
 import com.local.clicker.domain.NAME_MAX
 import com.local.clicker.domain.OpenAppStep
 import com.local.clicker.domain.SaveResult
@@ -29,6 +30,9 @@ class RoomTaskRepository(
     private val dao: ClickerDao,
     private val packageManager: PackageManager,
 ) : TaskRepository {
+
+    override fun observeLogs(): Flow<List<ExecutionLog>> =
+        dao.observeLogs().map { rows -> rows.map { it.toLog() } }
 
     override fun observeTasks(): Flow<List<TaskSummary>> =
         combine(dao.observeTasks(), dao.observeSteps()) { tasks, steps ->
@@ -194,15 +198,40 @@ class RoomTaskRepository(
 
     override suspend fun markTerminal(id: Long, status: TaskStatus, message: String, runAt: Long?) {
         val task = dao.getTask(id) ?: return
-        dao.upsertTask(
+        val now = System.currentTimeMillis()
+        dao.upsertTaskAndLog(
             task.copy(
                 status = status.name,
                 lastMessage = message.take(200),
                 lastRunAt = runAt ?: task.lastRunAt,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = now,
+            ),
+            ExecutionLogEntity(
+                taskId = id,
+                taskName = task.name,
+                status = status.name,
+                message = message,
+                createdAt = now,
+                trial = false,
             ),
         )
     }
+
+    override suspend fun recordTrial(id: Long, status: TaskStatus, message: String) {
+        val task = dao.getTask(id) ?: return
+        dao.insertLog(
+            ExecutionLogEntity(
+                taskId = id,
+                taskName = task.name,
+                status = status.name,
+                message = message,
+                createdAt = System.currentTimeMillis(),
+                trial = true,
+            ),
+        )
+    }
+
+    override suspend fun clearLogs() = dao.clearLogs()
 
     override suspend fun markMissed(id: Long) {
         markTerminal(id, TaskStatus.MISSED, "已超过计划时间 30 秒，未执行", null)
@@ -210,11 +239,20 @@ class RoomTaskRepository(
 
     override suspend fun markInterruptedRunning() {
         dao.tasksByStatus(TaskStatus.RUNNING.name).forEach { task ->
-            dao.upsertTask(
+            val now = System.currentTimeMillis()
+            dao.upsertTaskAndLog(
                 task.copy(
                     status = TaskStatus.FAILED.name,
                     lastMessage = "执行被中断",
-                    updatedAt = System.currentTimeMillis(),
+                    updatedAt = now,
+                ),
+                ExecutionLogEntity(
+                    taskId = task.id,
+                    taskName = task.name,
+                    status = TaskStatus.FAILED.name,
+                    message = "执行被中断",
+                    createdAt = now,
+                    trial = false,
                 ),
             )
         }
@@ -240,6 +278,16 @@ private fun TaskEntity.toRecord() = TaskRecord(
     updatedAt = updatedAt,
     lastRunAt = lastRunAt,
     lastMessage = lastMessage,
+)
+
+private fun ExecutionLogEntity.toLog() = ExecutionLog(
+    id = id,
+    taskId = taskId,
+    taskName = taskName,
+    status = status.toStatus(),
+    message = message,
+    createdAt = createdAt,
+    trial = trial,
 )
 
 private fun StepEntity.toDraft(): DraftStep = when (StepKind.valueOf(type)) {

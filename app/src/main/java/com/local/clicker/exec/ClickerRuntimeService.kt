@@ -101,7 +101,6 @@ class ClickerRuntimeService : Service() {
             val at = task.scheduledAt
             if (at != null && now - at > GRACE_MS) {
                 repo.markMissed(task.id)
-                Notifier.result(this, task.id, "错过", "已超过计划时间 30 秒，未执行")
                 Log.i(ExecutionEngine.TAG, "end task=${task.id} status=MISSED reason=grace")
                 return
             }
@@ -113,9 +112,11 @@ class ClickerRuntimeService : Service() {
             repo.executionSnapshot(request.taskId)
         }
         if (snapshot == null) {
-            if (!trial) {
+            if (trial) {
+                repo.recordTrial(request.taskId, TaskStatus.FAILED, "任务步骤不合法")
+                trialResults.emit(TrialResult(request.taskId, "任务步骤不合法"))
+            } else {
                 repo.markTerminal(request.taskId, TaskStatus.FAILED, "任务步骤不合法", null)
-                Notifier.result(this, request.taskId, "失败", "任务步骤不合法")
             }
             return
         }
@@ -153,23 +154,18 @@ class ClickerRuntimeService : Service() {
             Outcome.Cancelled -> "已取消"
         }
         Log.i(ExecutionEngine.TAG, "end task=${request.taskId} trial=$trial result=$message")
-        if (trial) {
-            trialResults.emit(TrialResult(request.taskId, message))
-            return
-        }
         val app = application as ClickerApp
         val status = when (outcome) {
             is Outcome.Success -> TaskStatus.SUCCESS
             is Outcome.Failed -> TaskStatus.FAILED
             Outcome.Cancelled -> TaskStatus.CANCELLED
         }
-        val title = when (status) {
-            TaskStatus.SUCCESS -> "成功"
-            TaskStatus.FAILED -> "失败"
-            else -> "已取消"
+        if (trial) {
+            app.graph.repository.recordTrial(request.taskId, status, message)
+            trialResults.emit(TrialResult(request.taskId, message))
+            return
         }
         app.graph.repository.markTerminal(request.taskId, status, message, runAt)
-        Notifier.result(this, request.taskId, title, message)
     }
 
     data class TrialResult(val taskId: Long, val message: String)

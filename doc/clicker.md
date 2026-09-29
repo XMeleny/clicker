@@ -8,7 +8,7 @@
 2. 用户可添加任务。任务正文是一条可编排脚本：步骤可任意插入、复制、调序，动作只有三种：打开应用、等待、点击屏幕上的某个位置。执行时严格按编排顺序自上而下跑完。
 3. 任务可以设置一个运行时刻，到点执行一次。没有周期、没有 cron、没有重复间隔。
 4. 无 root、无 adb、无网络、无账号、无云同步。
-5. 语言：Kotlin。界面：单 Activity + Jetpack Compose。本地库：Room。
+5. 语言：Kotlin。主界面的任务和日志页由两个 Fragment 承载，页面内容使用 Jetpack Compose。本地库：Room。
 
 ## 1. 目标与使用方式
 
@@ -23,6 +23,7 @@
 | 能力 | 行为 |
 | --- | --- |
 | 任务列表 | 展示名称、状态、计划时间、最近一次结果摘要 |
+| 日志列表 | 按时间倒序展示执行与试运行结果，支持清空；删除任务后仍保留日志 |
 | 新建 / 编辑 | 名称、可选的计划时间、脚本编排 |
 | 步骤编排 | 竖向脚本。动作只有 `打开应用`、`等待`、`点击`。可在任意位置插入、删除、复制、上移、下移、拖拽排序 |
 | 取点 | 在目标界面上点一次，把该点的绝对坐标写入当前点击步骤 |
@@ -47,8 +48,8 @@
 ## 3. 架构
 
 ```text
-ui（Compose）
-  TaskListScreen / TaskEditScreen / PermissionGate
+ui（Fragment + Compose）
+  TaskListFragment / LogListFragment / TaskEditScreen / PermissionGate
         │
         ▼
 domain
@@ -58,7 +59,7 @@ domain
         └─ exec：ClickerRuntimeService + ClickerAccessibilityService + ExecutionEngine
                 │
                 ▼
-data：Room（Task, Step）
+data：Room（Task, Step, ExecutionLog）
 ```
 
 模块职责：
@@ -342,7 +343,7 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 - 内容：步骤 i/N，以及这一步的短标签（打开 xxx / 等待 xxx ms / 点击 x,y）。
 - 通知动作：停止。
 - 不启动本应用的 Activity，不抢占目标应用的前台。
-- 结束后发一条普通通知：成功、失败、错过或已取消，带 `lastMessage`。点通知打开该任务详情。
+- 结束后移除前台通知，结果写入日志列表；不再单独发送结果通知。
 
 ### 6.5 单步试运行
 
@@ -351,7 +352,7 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 - 试运行使用一条独立的内存任务，不写入 `RUNNING` 到原任务上。原任务若是 `SCHEDULED`，闹钟保持不变。
 - 试运行与整单执行共用同一队列。有任务正在执行时，试运行按钮不可用。
 - 点击步骤仍做分辨率与方向检查。
-- 结果用 Toast 或编辑页横幅展示，不把原任务打成 `SUCCESS` / `FAILED`。
+- 结果用编辑页横幅展示并写入日志列表，不把原任务打成 `SUCCESS` / `FAILED`。
 
 ## 7. 取点
 
@@ -403,10 +404,9 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 
 按此顺序检查，缺哪个展示哪个的开启入口：
 
-1. 通知权限（`POST_NOTIFICATIONS`）。
-2. 无障碍服务。Android 13 起旁加载应用要先在应用信息里允许「受限制的设置」，然后才能在无障碍里打开本服务。引导文案写清这两步。
-3. 精确闹钟权限（设置里的「闹钟和提醒」）。未授予时可以编辑和立即执行，不能把任务保存为 `SCHEDULED`。
-4. 开机自启动以接收 `BOOT_COMPLETED`。在本机系统设置里允许本应用开机启动。引导只提供跳转说明和检测：下次冷启动对账时，若存在本应重注册却没有闹钟的 `SCHEDULED` 任务，列表顶部提示「计划可能在重启后丢失，请检查自启动」。
+1. 无障碍服务。Android 13 起旁加载应用要先在应用信息里允许「受限制的设置」，然后才能在无障碍里打开本服务。
+2. 精确闹钟权限（设置里的「闹钟和提醒」）。未授予时可以编辑和立即执行，不能把任务保存为 `SCHEDULED`。
+3. 开机自启动以接收 `BOOT_COMPLETED`。在本机系统设置里允许本应用开机启动。下次冷启动对账时，若存在本应重注册却没有闹钟的 `SCHEDULED` 任务，列表顶部提示「计划可能在重启后丢失，请检查自启动」。
 
 电池优化白名单不作为功能开关。若本机仍出现准时性问题，引导页放一句说明：在系统设置里对本应用关闭电池限制。
 
@@ -416,7 +416,6 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 
 | 权限 / 组件 | 用途 |
 | --- | --- |
-| `POST_NOTIFICATIONS` | 执行中通知、结果通知 |
 | `SCHEDULE_EXACT_ALARM` | `setAlarmClock` 在目标版本上仍需用户授予「闹钟和提醒」 |
 | `RECEIVE_BOOT_COMPLETED` | 重启后重注册闹钟 |
 | `FOREGROUND_SERVICE` | 执行期前台服务 |
@@ -463,6 +462,8 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 立即执行会消耗这条「一次」语义：一个已计划任务若被提前手动跑了，到点不再自动跑。
 
 ## 11. 日志
+
+应用内日志页保存每次执行、试运行、错过及中断的终态、原因和时间。旧数据库升级时导入现有任务的最近一条结果。
 
 Logcat tag：`Clicker`。
 

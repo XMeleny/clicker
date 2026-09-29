@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "tasks")
@@ -52,6 +54,17 @@ data class StepEntity(
     val rotation: Int?,
 )
 
+@Entity(tableName = "execution_logs", indices = [Index("taskId")])
+data class ExecutionLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val taskId: Long,
+    val taskName: String,
+    val status: String,
+    val message: String,
+    val createdAt: Long,
+    val trial: Boolean,
+)
+
 @Dao
 interface ClickerDao {
     @Query(
@@ -63,6 +76,9 @@ interface ClickerDao {
         """,
     )
     fun observeTasks(): Flow<List<TaskEntity>>
+
+    @Query("SELECT * FROM execution_logs ORDER BY createdAt DESC, id DESC")
+    fun observeLogs(): Flow<List<ExecutionLogEntity>>
 
     @Query("SELECT * FROM steps ORDER BY taskId ASC, orderIndex ASC")
     fun observeSteps(): Flow<List<StepEntity>>
@@ -86,6 +102,18 @@ interface ClickerDao {
     suspend fun upsertTask(entity: TaskEntity)
 
     @Insert
+    suspend fun insertLog(entity: ExecutionLogEntity)
+
+    @Query("DELETE FROM execution_logs")
+    suspend fun clearLogs()
+
+    @Transaction
+    suspend fun upsertTaskAndLog(task: TaskEntity, log: ExecutionLogEntity) {
+        upsertTask(task)
+        insertLog(log)
+    }
+
+    @Insert
     suspend fun insertSteps(steps: List<StepEntity>)
 
     @Query("DELETE FROM steps WHERE taskId = :taskId")
@@ -101,7 +129,34 @@ interface ClickerDao {
     }
 }
 
-@Database(entities = [TaskEntity::class, StepEntity::class], version = 1, exportSchema = false)
+@Database(entities = [TaskEntity::class, StepEntity::class, ExecutionLogEntity::class], version = 2, exportSchema = false)
 abstract class ClickerDatabase : RoomDatabase() {
     abstract fun dao(): ClickerDao
+}
+
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `execution_logs` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `taskId` INTEGER NOT NULL,
+                `taskName` TEXT NOT NULL,
+                `status` TEXT NOT NULL,
+                `message` TEXT NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                `trial` INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_execution_logs_taskId` ON `execution_logs` (`taskId`)")
+        db.execSQL(
+            """
+            INSERT INTO execution_logs (taskId, taskName, status, message, createdAt, trial)
+            SELECT id, name, status, lastMessage, COALESCE(lastRunAt, updatedAt), 0
+            FROM tasks
+            WHERE status IN ('SUCCESS', 'FAILED', 'MISSED', 'CANCELLED') AND lastMessage IS NOT NULL
+            """.trimIndent(),
+        )
+    }
 }

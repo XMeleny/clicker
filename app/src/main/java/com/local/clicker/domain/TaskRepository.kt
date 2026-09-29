@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 interface TaskRepository {
     fun observeTasks(): Flow<List<TaskSummary>>
 
+    fun observeLogs(): Flow<List<ExecutionLog>>
+
     fun observeTask(id: Long): Flow<TaskRecord?>
 
     suspend fun loadDraft(id: Long): TaskDraft?
@@ -33,6 +35,10 @@ interface TaskRepository {
     suspend fun markRunning(id: Long, now: Long)
 
     suspend fun markTerminal(id: Long, status: TaskStatus, message: String, runAt: Long?)
+
+    suspend fun recordTrial(id: Long, status: TaskStatus, message: String)
+
+    suspend fun clearLogs()
 
     suspend fun markMissed(id: Long)
 

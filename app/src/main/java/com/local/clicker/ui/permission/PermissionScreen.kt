@@ -21,7 +21,6 @@ import com.local.clicker.ui.AppTitleBar
 @Composable
 fun PermissionScreen(
     gate: PermissionGate,
-    onNotifications: () -> Unit,
     onAccessibility: () -> Unit,
     onAlarms: () -> Unit,
 ) {
@@ -33,8 +32,6 @@ fun PermissionScreen(
             modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            PermissionSwitch("通知", gate.notifications, onNotifications)
-            HorizontalDivider()
             PermissionSwitch("无障碍", gate.accessibility, onAccessibility)
             HorizontalDivider()
             PermissionSwitch("闹钟和提醒", gate.alarms, onAlarms)

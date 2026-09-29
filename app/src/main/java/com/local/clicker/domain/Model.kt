@@ -124,6 +124,16 @@ data class TaskSummary(
     val executable: Boolean,
 )
 
+data class ExecutionLog(
+    val id: Long,
+    val taskId: Long,
+    val taskName: String,
+    val status: TaskStatus,
+    val message: String,
+    val createdAt: Long,
+    val trial: Boolean,
+)
+
 data class TaskDraft(
     val task: TaskRecord,
     val steps: List<DraftStep>,
