@@ -1,12 +1,13 @@
 package com.local.clicker.ui.permission
 
 import android.app.AlarmManager
-import android.content.ComponentName
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -63,13 +64,16 @@ data class PermissionGate(
 }
 
 fun permissionGate(context: Context): PermissionGate {
-    val enabled = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-    ).orEmpty()
-    val component = ComponentName(context, ClickerAccessibilityService::class.java).flattenToString()
+    val accessibilityManager = context.getSystemService(AccessibilityManager::class.java)
+    val enabled = accessibilityManager
+        .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        .any { service ->
+            service.resolveInfo.serviceInfo.let { info ->
+                info.packageName == context.packageName && info.name == ClickerAccessibilityService::class.java.name
+            }
+        }
     val alarms = context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
-    return PermissionGate(enabled.split(':').contains(component), alarms)
+    return PermissionGate(enabled, alarms)
 }
 
 @Preview(showBackground = true)

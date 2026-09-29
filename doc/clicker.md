@@ -412,6 +412,8 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 
 无障碍服务的声明文案写明：本服务用于在你设定的时刻打开应用并点击你事先选好的坐标，不会读取通知、不会上传屏幕内容。
 
+开发时用 `gradlew.bat :app:installDebug` 或 `adb install -r -t app/build/outputs/apk/debug/app-debug.apk` 覆盖安装，Android Studio 的运行配置启用「Always install with package manager」。不要先卸载应用或清除数据；卸载、换签名或系统主动撤销后，无障碍服务仍需用户在系统设置中重新开启。
+
 ## 9. 权限与清单
 
 | 权限 / 组件 | 用途 |
