@@ -98,6 +98,24 @@ interface ClickerDao {
     @Insert
     suspend fun insertTask(entity: TaskEntity): Long
 
+    @Transaction
+    suspend fun reserveTaskId(): Long {
+        // Consuming the autoincrement ID keeps unsaved tasks out of the task list.
+        val id = insertTask(
+            TaskEntity(
+                name = "",
+                scheduledAt = null,
+                status = "DRAFT",
+                createdAt = 0L,
+                updatedAt = 0L,
+                lastRunAt = null,
+                lastMessage = null,
+            ),
+        )
+        deleteTask(id)
+        return id
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTask(entity: TaskEntity)
 

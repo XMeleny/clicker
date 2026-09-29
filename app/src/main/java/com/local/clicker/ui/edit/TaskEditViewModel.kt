@@ -19,6 +19,9 @@ import com.local.clicker.domain.isTerminal
 import com.local.clicker.exec.ClickerAccessibilityService
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.exec.PickerBus
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -42,7 +45,7 @@ data class EditUi(
     val loaded: Boolean = false,
 )
 
-class TaskEditViewModel(app: Application, private val initialId: Long) : AndroidViewModel(app) {
+class TaskEditViewModel(app: Application, private val initialId: Long, private val isNew: Boolean) : AndroidViewModel(app) {
     private val graph = (app as ClickerApp).graph
     private val _ui = MutableStateFlow(EditUi(taskId = initialId))
     val ui = _ui.asStateFlow()
@@ -51,7 +54,18 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
         viewModelScope.launch {
             val apps = loadApps()
             _ui.update { it.copy(apps = apps) }
-            if (initialId > 0L) {
+            if (isNew) {
+                val id = initialId.takeIf { it > 0L } ?: graph.repository.reserveTaskId()
+                val zone = ZoneId.systemDefault()
+                val todayAtNineOhFive = LocalDate.now(zone)
+                    .atTime(LocalTime.of(21, 5))
+                    .atZone(zone)
+                    .toInstant()
+                    .toEpochMilli()
+                _ui.update {
+                    it.copy(taskId = id, name = "任务$id", scheduledAt = todayAtNineOhFive, loaded = true)
+                }
+            } else if (initialId > 0L) {
                 graph.repository.loadDraft(initialId)?.let { draft ->
                     _ui.update {
                         it.copy(
@@ -60,8 +74,6 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
                             steps = draft.steps,
                             status = draft.task.status,
                             readOnly = draft.task.status == TaskStatus.RUNNING || draft.task.status.isTerminal(),
-                            notice = draft.task.lastMessage,
-                            showInvalid = draft.task.lastMessage?.contains("未完成") == true,
                             loaded = true,
                         )
                     }
@@ -71,7 +83,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
             }
         }
         viewModelScope.launch {
-            if (initialId <= 0L) return@launch
+            if (isNew || initialId <= 0L) return@launch
             graph.repository.observeTask(initialId).collect { task ->
                 if (task == null) return@collect
                 _ui.update {
@@ -194,7 +206,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
                     }
                     when {
                         result.leaveEditor -> onLeave()
-                        state.taskId <= 0L && result.taskId > 0L -> onReplaced(result.taskId)
+                        isNew -> onReplaced(result.taskId)
                     }
                 }
             }
@@ -224,7 +236,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
             } else {
                 _ui.update { it.copy(notice = "这一步还没完成", showInvalid = true) }
             }
-            if (state.taskId <= 0L) onReplaced(saved.taskId)
+            if (isNew) onReplaced(saved.taskId)
         }
     }
 
@@ -244,8 +256,8 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
                     showInvalid = !ready,
                 )
             }
-            if (!ready || draft == null) {
-                if (state.taskId <= 0L) onReplaced(saved.taskId)
+            if (!ready) {
+                if (isNew) onReplaced(saved.taskId)
                 return@launch
             }
             if (saved.status != TaskStatus.DRAFT && saved.status != TaskStatus.SCHEDULED) return@launch
@@ -253,7 +265,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
             context.startForegroundService(
                 ClickerRuntimeService.runIntent(context, saved.taskId, ClickerRuntimeService.SOURCE_MANUAL),
             )
-            if (state.taskId <= 0L) onReplaced(saved.taskId)
+            if (isNew) onReplaced(saved.taskId)
         }
     }
 

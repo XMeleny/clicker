@@ -29,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +58,6 @@ import com.local.clicker.domain.isTerminal
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.ui.AppTitleBar
 import com.local.clicker.ui.TitleBarAction
-import com.local.clicker.ui.list.statusLabel
 import com.local.clicker.ui.theme.ClickerTheme
 import java.time.Instant
 import java.time.LocalDate
@@ -67,18 +67,22 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskEditScreen(taskId: Long, onBack: () -> Unit, onReplaced: (Long) -> Unit) {
+fun TaskEditScreen(taskId: Long, isNew: Boolean, onBack: () -> Unit, onReserved: (Long) -> Unit, onReplaced: (Long) -> Unit) {
     val context = LocalContext.current
     val vm: TaskEditViewModel = viewModel(
-        key = "edit-$taskId",
+        key = if (isNew) "edit-new" else "edit-$taskId",
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return TaskEditViewModel(context.applicationContext as android.app.Application, taskId) as T
+                return TaskEditViewModel(context.applicationContext as android.app.Application, taskId, isNew) as T
             }
         },
     )
     val ui by vm.ui.collectAsState()
+    LaunchedEffect(ui.taskId, isNew) {
+        if (isNew && taskId == 0L && ui.taskId > 0L) onReserved(ui.taskId)
+    }
+    if (!ui.loaded) return
     val busy by ClickerRuntimeService.busy.collectAsState()
     TaskEditContent(
         ui = ui,
@@ -139,7 +143,6 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(statusLabel(ui.status))
             ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             ui.limitHint?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             ui.trialBanner?.let { Text("试运行：$it") }

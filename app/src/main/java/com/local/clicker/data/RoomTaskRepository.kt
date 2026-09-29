@@ -59,6 +59,8 @@ class RoomTaskRepository(
         return TaskDraft(task.toRecord(), dao.stepsOf(id).map { it.toDraft() })
     }
 
+    override suspend fun reserveTaskId(): Long = dao.reserveTaskId()
+
     override suspend fun save(
         id: Long?,
         name: String,
@@ -95,6 +97,7 @@ class RoomTaskRepository(
         val taskId = if (existing == null) {
             dao.insertTask(
                 TaskEntity(
+                    id = id ?: 0L,
                     name = trimmed,
                     scheduledAt = scheduledAt,
                     status = status.name,

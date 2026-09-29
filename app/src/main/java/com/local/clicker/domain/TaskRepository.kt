@@ -11,6 +11,8 @@ interface TaskRepository {
 
     suspend fun loadDraft(id: Long): TaskDraft?
 
+    suspend fun reserveTaskId(): Long
+
     suspend fun save(
         id: Long?,
         name: String,
