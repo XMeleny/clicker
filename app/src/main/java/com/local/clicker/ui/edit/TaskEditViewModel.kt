@@ -172,7 +172,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
         service.beginPick(key)
     }
 
-    fun save(onLeave: () -> Unit, onReplaced: (Long) -> Unit) {
+    fun save(onLeave: () -> Unit, onReplaced: (Long) -> Unit, onAlarmPermissionRequired: () -> Unit) {
         viewModelScope.launch {
             val state = _ui.value
             if (state.readOnly) return@launch
@@ -184,7 +184,10 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
                 now = System.currentTimeMillis(),
             )
             when (result) {
-                is SaveResult.Rejected -> showRejection(result)
+                is SaveResult.Rejected -> {
+                    showRejection(result)
+                    if (result.requiresAlarmPermission) onAlarmPermissionRequired()
+                }
                 is SaveResult.Saved -> {
                     _ui.update {
                         it.copy(
@@ -280,11 +283,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
     }
 
     private fun showRejection(result: SaveResult.Rejected) {
-        if (result.message == "计划时间必须是将来的时间") {
-            Toast.makeText(getApplication(), result.message, Toast.LENGTH_SHORT).show()
-        } else {
-            _ui.update { it.copy(notice = result.message) }
-        }
+        Toast.makeText(getApplication(), result.message, Toast.LENGTH_SHORT).show()
     }
 
     fun cancelSchedule(onLeave: () -> Unit) {

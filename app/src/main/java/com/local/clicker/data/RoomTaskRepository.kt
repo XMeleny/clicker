@@ -81,12 +81,14 @@ class RoomTaskRepository(
         }
 
         val executable = steps.areDraftStepsExecutable(packageManager)
+        if (executable && scheduledAt != null && !allowSchedule) {
+            return SaveResult.Rejected("未授予闹钟权限，请先授权", existing?.scheduledAt, requiresAlarmPermission = true)
+        }
         val status = when {
             executable && scheduledAt != null && allowSchedule -> TaskStatus.SCHEDULED
             else -> TaskStatus.DRAFT
         }
         val notice = when {
-            executable && scheduledAt != null && !allowSchedule -> "未授予闹钟权限，已保存为草稿"
             !executable -> "还有未完成的步骤，已保存为草稿"
             else -> null
         }

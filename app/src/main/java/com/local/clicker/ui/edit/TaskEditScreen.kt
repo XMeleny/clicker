@@ -65,7 +65,12 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskEditScreen(taskId: Long, onBack: () -> Unit, onReplaced: (Long) -> Unit) {
+fun TaskEditScreen(
+    taskId: Long,
+    onBack: () -> Unit,
+    onReplaced: (Long) -> Unit,
+    onAlarmPermissionRequired: () -> Unit,
+) {
     val context = LocalContext.current
     val vm: TaskEditViewModel = viewModel(
         key = "edit-$taskId",
@@ -83,7 +88,7 @@ fun TaskEditScreen(taskId: Long, onBack: () -> Unit, onReplaced: (Long) -> Unit)
         ui = ui,
         busy = busy,
         actions = EditActions(
-            save = { vm.save(onBack, onReplaced) },
+            save = { vm.save(onBack, onReplaced, onAlarmPermissionRequired) },
             setName = vm::setName,
             setScheduledAt = vm::setScheduledAt,
             toggle = vm::toggle,

@@ -2,7 +2,9 @@ package com.local.clicker.ui.edit
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -23,6 +25,11 @@ class TaskEditActivity : ComponentActivity() {
                     taskId = taskId,
                     onBack = ::finish,
                     onReplaced = { taskId = it },
+                    onAlarmPermissionRequired = {
+                        startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            data = Uri.parse("package:$packageName")
+                        })
+                    },
                 )
             }
         }

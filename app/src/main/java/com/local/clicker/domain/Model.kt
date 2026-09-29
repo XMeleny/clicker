@@ -157,7 +157,11 @@ sealed interface SaveResult {
         val notice: String?,
     ) : SaveResult
 
-    data class Rejected(val message: String, val revertScheduledAt: Long?) : SaveResult
+    data class Rejected(
+        val message: String,
+        val revertScheduledAt: Long?,
+        val requiresAlarmPermission: Boolean = false,
+    ) : SaveResult
 }
 
 sealed interface EditResult {
