@@ -29,7 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -40,6 +40,7 @@ import com.local.clicker.domain.TaskSummary
 import com.local.clicker.domain.isTerminal
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.ui.edit.formatWhen
+import com.local.clicker.ui.theme.ClickerTheme
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -86,6 +87,30 @@ fun TaskListScreen(onOpen: (Long) -> Unit, onCreate: () -> Unit) {
     val vm: TaskListViewModel = viewModel()
     val ui by vm.tasks.collectAsState()
     val busy by ClickerRuntimeService.busy.collectAsState()
+    TaskListContent(
+        ui = ui,
+        busy = busy,
+        onOpen = onOpen,
+        onCreate = onCreate,
+        onRun = vm::runNow,
+        onCancel = vm::cancel,
+        onDelete = vm::delete,
+        onCopy = { id -> vm.copy(id, onOpen) },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun TaskListContent(
+    ui: ListUi,
+    busy: Boolean,
+    onOpen: (Long) -> Unit,
+    onCreate: () -> Unit,
+    onRun: (Long) -> Unit,
+    onCancel: (Long) -> Unit,
+    onDelete: (Long) -> Unit,
+    onCopy: (Long) -> Unit,
+) {
     var pendingDelete by remember { mutableStateOf<Long?>(null) }
     Scaffold(
         topBar = { TopAppBar(title = { Text("点击器") }) },
@@ -106,10 +131,10 @@ fun TaskListScreen(onOpen: (Long) -> Unit, onCreate: () -> Unit) {
                     task = task,
                     busy = busy,
                     onOpen = { onOpen(task.id) },
-                    onRun = { vm.runNow(task.id) },
-                    onCancel = { vm.cancel(task.id) },
+                    onRun = { onRun(task.id) },
+                    onCancel = { onCancel(task.id) },
                     onDelete = { pendingDelete = task.id },
-                    onCopy = { vm.copy(task.id, onOpen) },
+                    onCopy = { onCopy(task.id) },
                 )
             }
         }
@@ -121,11 +146,35 @@ fun TaskListScreen(onOpen: (Long) -> Unit, onCreate: () -> Unit) {
             text = { Text("删除后闹钟也会取消。") },
             confirmButton = {
                 TextButton(onClick = {
-                    vm.delete(id)
+                    onDelete(id)
                     pendingDelete = null
                 }) { Text("删除") }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("留下") } },
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun TaskListScreenPreview() {
+    ClickerTheme {
+        TaskListContent(
+            ui = ListUi(
+                tasks = listOf(
+                    TaskSummary(1, "早晨签到", null, TaskStatus.DRAFT, 0, null, true),
+                    TaskSummary(2, "午间提醒", 1_800_000_000_000L, TaskStatus.SCHEDULED, 0, null, true),
+                    TaskSummary(3, "上次执行", null, TaskStatus.SUCCESS, 0, "已完成", true),
+                ),
+                bootBanner = false,
+            ),
+            busy = false,
+            onOpen = {},
+            onCreate = {},
+            onRun = {},
+            onCancel = {},
+            onDelete = {},
+            onCopy = {},
         )
     }
 }

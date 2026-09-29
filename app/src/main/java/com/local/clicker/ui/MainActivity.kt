@@ -1,83 +1,53 @@
 package com.local.clicker.ui
 
-import android.Manifest
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.local.clicker.exec.ClickerAccessibilityService
+import com.local.clicker.domain.TaskStatus
+import com.local.clicker.domain.TaskSummary
 import com.local.clicker.ui.edit.TaskEditScreen
+import com.local.clicker.ui.list.ListUi
+import com.local.clicker.ui.list.TaskListContent
 import com.local.clicker.ui.list.TaskListScreen
-import com.local.clicker.ui.permission.PermissionScreen
+import com.local.clicker.ui.permission.PermissionActivity
+import com.local.clicker.ui.permission.permissionGate
 import com.local.clicker.ui.theme.ClickerTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!permissionGate(this).ready) {
+            startActivity(Intent(this, PermissionActivity::class.java).apply {
+                putExtra(EXTRA_TASK_ID, intent.getLongExtra(EXTRA_TASK_ID, 0L))
+            })
+            finish()
+            return
+        }
         enableEdgeToEdge()
         setContent {
             ClickerTheme {
-                var gate by remember { mutableStateOf(permissionGate(this)) }
-                val lifecycleOwner = LocalLifecycleOwner.current
-                DisposableEffect(lifecycleOwner) {
-                    val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) gate = permissionGate(this@MainActivity)
-                    }
-                    lifecycleOwner.lifecycle.addObserver(observer)
-                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-                }
-                if (!gate.ready) {
-                    PermissionScreen(gate)
-                } else {
-                    val nav = rememberNavController()
-                    val startId = intent.getLongExtra(EXTRA_TASK_ID, 0L)
-                    NavHost(
-                        navController = nav,
-                        startDestination = if (startId > 0L) "edit/$startId" else "list",
-                    ) {
-                        composable("list") {
-                            TaskListScreen(
-                                onOpen = { id -> nav.navigate("edit/$id") },
-                                onCreate = { nav.navigate("edit/0") },
-                            )
-                        }
-                        composable(
-                            route = "edit/{id}",
-                            arguments = listOf(navArgument("id") { type = NavType.LongType }),
-                        ) { entry ->
-                            val id = entry.arguments?.getLong("id") ?: 0L
-                            TaskEditScreen(
-                                taskId = id,
-                                onBack = { nav.popBackStack() },
-                                onReplaced = { newId ->
-                                    nav.navigate("edit/$newId") {
-                                        popUpTo("edit/$id") { inclusive = true }
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
+                MainNavigation(intent.getLongExtra(EXTRA_TASK_ID, 0L))
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!permissionGate(this).ready && !isFinishing) {
+            startActivity(Intent(this, PermissionActivity::class.java).apply {
+                putExtra(EXTRA_TASK_ID, intent.getLongExtra(EXTRA_TASK_ID, 0L))
+            })
+            finish()
         }
     }
 
@@ -89,19 +59,53 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-data class PermissionGate(val notifications: Boolean, val accessibility: Boolean) {
-    val ready: Boolean = notifications && accessibility
+@Composable
+private fun MainNavigation(startId: Long) {
+    val nav = rememberNavController()
+    NavHost(
+        navController = nav,
+        startDestination = if (startId > 0L) "edit/$startId" else "list",
+    ) {
+        composable("list") {
+            TaskListScreen(
+                onOpen = { id -> nav.navigate("edit/$id") },
+                onCreate = { nav.navigate("edit/0") },
+            )
+        }
+        composable(
+            route = "edit/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.LongType }),
+        ) { entry ->
+            val id = entry.arguments?.getLong("id") ?: 0L
+            TaskEditScreen(
+                taskId = id,
+                onBack = { nav.popBackStack() },
+                onReplaced = { newId ->
+                    nav.navigate("edit/$newId") {
+                        popUpTo("edit/$id") { inclusive = true }
+                    }
+                },
+            )
+        }
+    }
 }
 
-fun permissionGate(context: Context): PermissionGate {
-    val notifications = ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.POST_NOTIFICATIONS,
-    ) == PackageManager.PERMISSION_GRANTED
-    val enabled = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-    ).orEmpty()
-    val component = ComponentName(context, ClickerAccessibilityService::class.java).flattenToString()
-    return PermissionGate(notifications, enabled.contains(component))
+@Preview(showBackground = true)
+@Composable
+private fun MainActivityPreview() {
+    ClickerTheme {
+        TaskListContent(
+            ui = ListUi(
+                listOf(TaskSummary(1, "早晨签到", null, TaskStatus.DRAFT, 0, null, true)),
+                false,
+            ),
+            busy = false,
+            onOpen = {},
+            onCreate = {},
+            onRun = {},
+            onCancel = {},
+            onDelete = {},
+            onCopy = {},
+        )
+    }
 }
