@@ -56,3 +56,13 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.kotlinx.coroutines.android)
 }
+
+val debugAdb = androidComponents.sdkComponents.adb
+
+tasks.register<Exec>("runDebugWithoutForceStop") {
+    group = "application"
+    description = "Install and launch the debug app without force-stopping its accessibility service."
+    dependsOn("installDebug")
+    executable = debugAdb.get().asFile.absolutePath
+    args("shell", "am", "start", "-n", "com.local.clicker/.ui.MainActivity")
+}

@@ -412,7 +412,7 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 
 无障碍服务的声明文案写明：本服务用于在你设定的时刻打开应用并点击你事先选好的坐标，不会读取通知、不会上传屏幕内容。
 
-开发时用 `gradlew.bat :app:installDebug` 或 `adb install -r -t app/build/outputs/apk/debug/app-debug.apk` 覆盖安装，Android Studio 的运行配置启用「Always install with package manager」。不要先卸载应用或清除数据；卸载、换签名或系统主动撤销后，无障碍服务仍需用户在系统设置中重新开启。
+开发时，在 Android Studio 的运行配置下拉框选择「Clicker (保留无障碍)」再点 Run。该配置执行 Gradle `:app:runDebugWithoutForceStop`：覆盖安装后启动主界面，不调用 `am force-stop`。这台小米手机的系统会在 `force-stop` 本应用时关闭其无障碍服务，因此不要用默认的 `app` Android App 运行配置；该 Gradle 配置不会自动附加调试器，需要时从 Android Studio 手动附加。卸载、换签名或系统主动撤销后仍需在系统设置中重新开启无障碍。
 
 ## 9. 权限与清单
 
