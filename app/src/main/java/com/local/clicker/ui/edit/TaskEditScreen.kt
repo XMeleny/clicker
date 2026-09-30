@@ -1,5 +1,6 @@
 package com.local.clicker.ui.edit
 
+import android.widget.NumberPicker
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -7,7 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -31,9 +34,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -43,6 +48,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -64,6 +70,7 @@ import com.local.clicker.ui.theme.ClickerTheme
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -493,20 +500,48 @@ private fun ScheduleDateDialog(initial: Long?, onConfirm: (Long) -> Unit, onDism
 private fun ScheduleTimeDialog(initial: Long?, onConfirm: (Long) -> Unit, onDismiss: () -> Unit) {
     val zone = ZoneId.systemDefault()
     val seed = Instant.ofEpochMilli(initial ?: defaultScheduledAt()).atZone(zone)
-    val state = androidx.compose.material3.rememberTimePickerState(
-        initialHour = seed.hour,
-        initialMinute = seed.minute,
-        is24Hour = true,
-    )
+    var hour by remember(initial) { mutableIntStateOf(seed.hour) }
+    var minute by remember(initial) { mutableIntStateOf(seed.minute) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择时间") },
-        text = { androidx.compose.material3.TimePicker(state = state) },
+        text = {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("时")
+                    TimeWheel(hour, 23, "小时", onValueChange = { hour = it })
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("分")
+                    TimeWheel(minute, 59, "分钟", onValueChange = { minute = it })
+                }
+            }
+        },
         confirmButton = {
             TextButton(onClick = {
-                onConfirm(seed.toLocalDate().atTime(state.hour, state.minute).atZone(zone).toInstant().toEpochMilli())
+                onConfirm(seed.toLocalDate().atTime(hour, minute).atZone(zone).toInstant().toEpochMilli())
             }) { Text("确定") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun TimeWheel(value: Int, max: Int, label: String, onValueChange: (Int) -> Unit) {
+    AndroidView(
+        modifier = Modifier.width(96.dp).height(176.dp),
+        factory = { context ->
+            NumberPicker(context).apply {
+                minValue = 0
+                maxValue = max
+                this.value = value
+                wrapSelectorWheel = true
+                descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
+                setFormatter { number -> String.format(Locale.getDefault(), "%02d", number) }
+                contentDescription = label
+                setOnValueChangedListener { _, _, selected -> onValueChange(selected) }
+            }
+        },
+        update = { picker -> if (picker.value != value) picker.value = value },
     )
 }
