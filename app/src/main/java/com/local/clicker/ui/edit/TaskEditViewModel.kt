@@ -22,9 +22,6 @@ import com.local.clicker.domain.formatWaitSeconds
 import com.local.clicker.exec.ClickerAccessibilityService
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.exec.PickerBus
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -55,7 +52,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
         EditUi(
             taskId = initialId,
             name = if (initialId == 0L) "未命名" else "",
-            scheduledAt = if (initialId == 0L) todayAtNineOhFive() else null,
+            scheduledAt = if (initialId == 0L) defaultScheduledAt() else null,
         ),
     )
     val ui = _ui.asStateFlow()
@@ -359,9 +356,4 @@ fun DraftStep.summary(apps: List<AppOption>): String = when (this) {
 fun DraftStep.invalid(apps: List<AppOption>): Boolean = when (this) {
     is DraftOpenApp -> !isComplete() || apps.none { it.packageName == packageName }
     else -> !isComplete()
-}
-
-private fun todayAtNineOhFive(): Long {
-    val zone = ZoneId.systemDefault()
-    return LocalDate.now(zone).atTime(LocalTime.of(21, 5)).atZone(zone).toInstant().toEpochMilli()
 }

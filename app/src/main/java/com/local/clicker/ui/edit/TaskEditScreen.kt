@@ -62,8 +62,6 @@ import com.local.clicker.ui.AppTitleBar
 import com.local.clicker.ui.TitleBarAction
 import com.local.clicker.ui.theme.ClickerTheme
 import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -138,6 +136,7 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
     var changeTarget by remember { mutableStateOf<Int?>(null) }
     var pickingApp by remember { mutableStateOf<Long?>(null) }
     var showDate by remember { mutableStateOf(false) }
+    var showTime by remember { mutableStateOf(false) }
     var showTemplates by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         AppTitleBar(
@@ -161,9 +160,10 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             Text(ui.scheduledAt?.let { "计划时间 ${formatWhen(it)}" } ?: "计划时间：仅手动")
             if (!ui.readOnly) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { showDate = true }) { Text("选择时间") }
-                    TextButton(onClick = { actions.setScheduledAt(null) }) { Text("清除时间") }
+                    TextButton(onClick = { showDate = true }) { Text("选择日期") }
+                    TextButton(onClick = { showTime = true }) { Text("选择时间") }
                 }
+                TextButton(onClick = { actions.setScheduledAt(null) }) { Text("清除时间") }
             }
             Text("脚本按从上到下的顺序执行")
             ui.steps.forEachIndexed { index, step ->
@@ -269,13 +269,23 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
         }
     }
     if (showDate) {
-        ScheduleDialog(
+        ScheduleDateDialog(
             initial = ui.scheduledAt,
             onConfirm = {
                 actions.setScheduledAt(it)
                 showDate = false
             },
             onDismiss = { showDate = false },
+        )
+    }
+    if (showTime) {
+        ScheduleTimeDialog(
+            initial = ui.scheduledAt,
+            onConfirm = {
+                actions.setScheduledAt(it)
+                showTime = false
+            },
+            onDismiss = { showTime = false },
         )
     }
 }
@@ -458,47 +468,45 @@ internal fun StepKind.label(): String = when (this) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ScheduleDialog(initial: Long?, onConfirm: (Long) -> Unit, onDismiss: () -> Unit) {
+private fun ScheduleDateDialog(initial: Long?, onConfirm: (Long) -> Unit, onDismiss: () -> Unit) {
     val zone = ZoneId.systemDefault()
-    val seed = initial?.let { Instant.ofEpochMilli(it).atZone(zone) }
-    var date by remember {
-        mutableStateOf(seed?.toLocalDate() ?: LocalDate.now().plusDays(1))
-    }
-    var time by remember { mutableStateOf(seed?.toLocalTime()?.withSecond(0)?.withNano(0) ?: LocalTime.of(8, 0)) }
-    var page by remember { mutableStateOf(0) }
-    if (page == 0) {
-        val state = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-        )
-        androidx.compose.material3.DatePickerDialog(
-            onDismissRequest = onDismiss,
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let {
-                        date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
-                    }
-                    page = 1
-                }) { Text("下一步") }
-            },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        ) { androidx.compose.material3.DatePicker(state = state) }
-    } else {
-        val state = androidx.compose.material3.rememberTimePickerState(
-            initialHour = time.hour,
-            initialMinute = time.minute,
-            is24Hour = true,
-        )
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("选择时间") },
-            text = { androidx.compose.material3.TimePicker(state = state) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val local = date.atTime(state.hour, state.minute).atZone(zone)
-                    onConfirm(local.toInstant().toEpochMilli())
-                }) { Text("确定") }
-            },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        )
-    }
+    val seed = Instant.ofEpochMilli(initial ?: defaultScheduledAt()).atZone(zone)
+    val state = androidx.compose.material3.rememberDatePickerState(
+        initialSelectedDateMillis = seed.toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+    )
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                state.selectedDateMillis?.let { millis ->
+                    val date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                    onConfirm(date.atTime(seed.toLocalTime()).atZone(zone).toInstant().toEpochMilli())
+                }
+            }) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    ) { androidx.compose.material3.DatePicker(state = state) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScheduleTimeDialog(initial: Long?, onConfirm: (Long) -> Unit, onDismiss: () -> Unit) {
+    val zone = ZoneId.systemDefault()
+    val seed = Instant.ofEpochMilli(initial ?: defaultScheduledAt()).atZone(zone)
+    val state = androidx.compose.material3.rememberTimePickerState(
+        initialHour = seed.hour,
+        initialMinute = seed.minute,
+        is24Hour = true,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择时间") },
+        text = { androidx.compose.material3.TimePicker(state = state) },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirm(seed.toLocalDate().atTime(state.hour, state.minute).atZone(zone).toInstant().toEpochMilli())
+            }) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
