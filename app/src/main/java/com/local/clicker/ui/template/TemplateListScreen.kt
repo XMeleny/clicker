@@ -100,7 +100,7 @@ internal fun TemplateListContent(
 private fun TemplateListPreview() {
     ClickerTheme {
         TemplateListContent(
-            listOf(TemplateSummary(1, "签到", listOf("打开 日历", "等待 1000ms", "点击 (420, 860)"), true)),
+            listOf(TemplateSummary(1, "签到", listOf("打开 日历", "等待 1 秒", "点击 (420, 860)"), true)),
             {}, {}, {},
         )
     }

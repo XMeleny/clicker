@@ -37,7 +37,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -53,6 +55,8 @@ import com.local.clicker.domain.TaskStatus
 import com.local.clicker.domain.TapPoint
 import com.local.clicker.domain.WAIT_MAX_MS
 import com.local.clicker.domain.WAIT_MIN_MS
+import com.local.clicker.domain.formatWaitSeconds
+import com.local.clicker.domain.parseWaitSeconds
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.ui.AppTitleBar
 import com.local.clicker.ui.TitleBarAction
@@ -184,7 +188,7 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
                     onPick = { actions.requestPick(step.key) },
                     onPickApp = { pickingApp = step.key },
                     onWait = { text ->
-                        val parsed = text.toLongOrNull()
+                        val parsed = parseWaitSeconds(text)
                         actions.updateStep(DraftWait(step.key, step.orderIndex, parsed))
                     },
                 )
@@ -401,12 +405,16 @@ internal fun StepCard(
                         Text(step.summary(apps))
                     }
                     is DraftWait -> {
+                        var waitSeconds by remember(step.key) {
+                            mutableStateOf(step.waitMs?.let(::formatWaitSeconds).orEmpty())
+                        }
                         OutlinedTextField(
-                            value = step.waitMs?.toString().orEmpty(),
-                            onValueChange = onWait,
+                            value = waitSeconds,
+                            onValueChange = { waitSeconds = it; onWait(it) },
                             enabled = !readOnly,
-                            label = { Text("等待毫秒") },
-                            supportingText = { Text("允许 $WAIT_MIN_MS～$WAIT_MAX_MS") },
+                            label = { Text("等待时间（秒）") },
+                            supportingText = { Text("允许 ${formatWaitSeconds(WAIT_MIN_MS)}～${formatWaitSeconds(WAIT_MAX_MS)} 秒") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         )
                     }
                     is DraftTap -> {

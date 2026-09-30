@@ -9,10 +9,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -164,9 +165,9 @@ private fun TaskListScreenPreview() {
         TaskListContent(
             ui = ListUi(
                 tasks = listOf(
-                    TaskSummary(1, "早晨签到", null, TaskStatus.DRAFT, 0, null, true, listOf("打开 日历", "等待 1000ms")),
+                    TaskSummary(1, "早晨签到", null, TaskStatus.DRAFT, 0, null, true, listOf("打开 日历", "等待 1 秒")),
                     TaskSummary(2, "午间提醒", 1_800_000_000_000L, TaskStatus.SCHEDULED, 0, null, true, listOf("点击 (420, 860)")),
-                    TaskSummary(3, "上次执行", 1_700_000_000_000L, TaskStatus.SUCCESS, 0, "已完成", true, listOf("等待 500ms")),
+                    TaskSummary(3, "上次执行", 1_700_000_000_000L, TaskStatus.SUCCESS, 0, "已完成", true, listOf("等待 0.5 秒")),
                 ),
                 bootBanner = false,
             ),
@@ -197,24 +198,32 @@ private fun TaskRow(
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = color),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(task.name, style = MaterialTheme.typography.titleMedium)
-            Text(task.scheduledAt?.let(::formatWhen) ?: "未设置时间", style = MaterialTheme.typography.bodyMedium)
-            if (task.steps.isEmpty()) {
-                Text("暂无步骤", style = MaterialTheme.typography.bodySmall)
-            } else {
-                task.steps.forEachIndexed { index, step ->
-                    Text("${index + 1}. $step", style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(task.name, style = MaterialTheme.typography.titleMedium)
+                Text(task.scheduledAt?.let(::formatWhen) ?: "未设置时间", style = MaterialTheme.typography.bodyMedium)
+                if (task.steps.isEmpty()) {
+                    Text("暂无步骤", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    task.steps.forEachIndexed { index, step ->
+                        Text("${index + 1}. $step", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val canRun = task.executable &&
-                    (task.status == TaskStatus.DRAFT || task.status == TaskStatus.SCHEDULED) &&
-                    !busy
-                if (canRun) Button(onClick = onRun) { Text("立即执行") }
-                if (task.status == TaskStatus.SCHEDULED) TextButton(onClick = onCancel) { Text("取消计划") }
-                if (task.status != TaskStatus.RUNNING) TextButton(onClick = onOpen) { Text("编辑") }
                 if (task.status != TaskStatus.RUNNING) TextButton(onClick = onDelete) { Text("删除") }
+            }
+            val canRun = task.executable &&
+                (task.status == TaskStatus.DRAFT || task.status == TaskStatus.SCHEDULED) && !busy
+            if (canRun || task.status == TaskStatus.SCHEDULED) {
+                Column(Modifier.width(104.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (canRun) OutlinedButton(onClick = onRun, modifier = Modifier.fillMaxWidth()) {
+                        Text("立即执行")
+                    }
+                    if (task.status == TaskStatus.SCHEDULED) {
+                        OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                            Text("取消计划")
+                        }
+                    }
+                }
             }
         }
     }

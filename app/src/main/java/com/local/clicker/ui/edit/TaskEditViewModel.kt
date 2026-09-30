@@ -18,6 +18,7 @@ import com.local.clicker.domain.SaveResult
 import com.local.clicker.domain.ScriptEditor
 import com.local.clicker.domain.StepKind
 import com.local.clicker.domain.TaskStatus
+import com.local.clicker.domain.formatWaitSeconds
 import com.local.clicker.exec.ClickerAccessibilityService
 import com.local.clicker.exec.ClickerRuntimeService
 import com.local.clicker.exec.PickerBus
@@ -351,7 +352,7 @@ fun DraftStep.summary(apps: List<AppOption>): String = when (this) {
     is DraftOpenApp -> packageName?.let { pkg ->
         "打开 " + (apps.find { it.packageName == pkg }?.label ?: pkg)
     } ?: "打开应用（未选择）"
-    is DraftWait -> waitMs?.let { "等待 ${it}ms" } ?: "等待（未填写）"
+    is DraftWait -> waitMs?.let { "等待 ${formatWaitSeconds(it)} 秒" } ?: "等待（未填写）"
     is DraftTap -> tap?.let { "点击 (${it.x}, ${it.y})" } ?: "点击（未取点）"
 }
 

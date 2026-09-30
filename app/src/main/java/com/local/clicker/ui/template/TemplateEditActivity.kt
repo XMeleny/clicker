@@ -48,6 +48,7 @@ import com.local.clicker.domain.DraftWait
 import com.local.clicker.domain.EditResult
 import com.local.clicker.domain.ScriptEditor
 import com.local.clicker.domain.StepKind
+import com.local.clicker.domain.parseWaitSeconds
 import com.local.clicker.exec.ClickerAccessibilityService
 import com.local.clicker.exec.PickerBus
 import com.local.clicker.ui.AppTitleBar
@@ -220,7 +221,7 @@ private fun TemplateEditContent(ui: TemplateEditUi, onSave: () -> Unit, vm: Temp
                     onTrial = {},
                     onPick = { vm?.requestPick(step.key) },
                     onPickApp = { pickingApp = step.key },
-                    onWait = { vm?.updateStep(DraftWait(step.key, 0, it.toLongOrNull())) },
+                    onWait = { vm?.updateStep(DraftWait(step.key, 0, parseWaitSeconds(it))) },
                 )
             }
             Button(onClick = { kindTarget = ui.steps.size }, enabled = ui.steps.size < 30) {

@@ -22,6 +22,7 @@ import com.local.clicker.domain.TaskSummary
 import com.local.clicker.domain.WAIT_MAX_MS
 import com.local.clicker.domain.WAIT_MIN_MS
 import com.local.clicker.domain.WaitStep
+import com.local.clicker.domain.formatWaitSeconds
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -256,7 +257,7 @@ internal fun StepEntity.summary(packageManager: PackageManager): String = when (
         }.getOrDefault(pkg)
         "打开 $label"
     } ?: "打开应用（未选择）"
-    StepKind.WAIT -> waitMs?.let { "等待 ${it}ms" } ?: "等待（未填写）"
+    StepKind.WAIT -> waitMs?.let { "等待 ${formatWaitSeconds(it)} 秒" } ?: "等待（未填写）"
     StepKind.TAP -> if (x != null && y != null) "点击 ($x, $y)" else "点击（未取点）"
 }
 

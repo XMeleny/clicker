@@ -8,6 +8,7 @@ import com.local.clicker.domain.OpenAppStep
 import com.local.clicker.domain.Step
 import com.local.clicker.domain.TapStep
 import com.local.clicker.domain.WaitStep
+import com.local.clicker.domain.formatWaitSeconds
 
 data class LiveScreen(val width: Int, val height: Int, val rotation: Int)
 
@@ -28,6 +29,6 @@ fun Step.shortLabel(context: Context): String = when (this) {
         }.getOrDefault(packageName)
         "打开 $label"
     }
-    is WaitStep -> "等待 ${waitMs}ms"
+    is WaitStep -> "等待 ${formatWaitSeconds(waitMs)} 秒"
     is TapStep -> "点击 ($x,$y)"
 }
