@@ -248,7 +248,7 @@ private fun TaskEntity.toRecord() = TaskRecord(
     lastMessage = lastMessage,
 )
 
-private fun StepEntity.summary(packageManager: PackageManager): String = when (StepKind.valueOf(type)) {
+internal fun StepEntity.summary(packageManager: PackageManager): String = when (StepKind.valueOf(type)) {
     StepKind.OPEN_APP -> packageName?.let { pkg ->
         val label = runCatching {
             val app = packageManager.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0))
@@ -270,7 +270,7 @@ private fun ExecutionLogEntity.toLog() = ExecutionLog(
     trial = trial,
 )
 
-private fun StepEntity.toDraft(): DraftStep = when (StepKind.valueOf(type)) {
+internal fun StepEntity.toDraft(): DraftStep = when (StepKind.valueOf(type)) {
     StepKind.OPEN_APP -> DraftOpenApp(id, orderIndex, packageName)
     StepKind.WAIT -> DraftWait(id, orderIndex, waitMs)
     StepKind.TAP -> DraftTap(
@@ -306,7 +306,7 @@ private fun StepEntity.toStep(): Step? {
     }
 }
 
-private fun DraftStep.toEntity(taskId: Long): StepEntity {
+internal fun DraftStep.toEntity(taskId: Long): StepEntity {
     val persistedId = if (key > 0) key else 0
     return when (this) {
         is DraftOpenApp -> StepEntity(

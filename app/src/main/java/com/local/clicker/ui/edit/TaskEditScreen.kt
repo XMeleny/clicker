@@ -99,6 +99,7 @@ fun TaskEditScreen(
             requestPick = vm::requestPick,
             updateStep = vm::updateStep,
             add = vm::add,
+            selectTemplate = vm::selectTemplate,
             insertBelow = vm::insertBelow,
             changeType = vm::changeType,
             runNow = { vm.runNow(onReplaced) },
@@ -119,6 +120,7 @@ private data class EditActions(
     val requestPick: (Long) -> Unit,
     val updateStep: (DraftStep) -> Unit,
     val add: (StepKind) -> Unit,
+    val selectTemplate: (Long) -> Unit,
     val insertBelow: (Int, StepKind) -> Unit,
     val changeType: (Int, StepKind) -> Unit,
     val runNow: () -> Unit,
@@ -132,6 +134,7 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
     var changeTarget by remember { mutableStateOf<Int?>(null) }
     var pickingApp by remember { mutableStateOf<Long?>(null) }
     var showDate by remember { mutableStateOf(false) }
+    var showTemplates by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         AppTitleBar(
             title = if (ui.taskId == 0L) "新任务" else ui.name.ifBlank { "任务" },
@@ -188,9 +191,9 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             }
             if (!ui.readOnly) {
                 Button(
-                    onClick = { kindTarget = KindTarget.Append },
+                    onClick = { showTemplates = true },
                     enabled = ui.steps.size < 30,
-                ) { Text("添加步骤") }
+                ) { Text("选择动作模板") }
             }
             if (ui.taskId > 0L && !ui.readOnly && ScriptLooksExecutable(ui)) {
                 Button(onClick = actions.runNow, enabled = !busy) { Text("立即执行") }
@@ -211,6 +214,25 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             },
             onDismiss = { kindTarget = null },
         )
+    }
+    if (showTemplates) {
+        ModalBottomSheet(onDismissRequest = { showTemplates = false }, sheetState = rememberModalBottomSheetState()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("选择动作模板", style = MaterialTheme.typography.titleMedium)
+                if (ui.templates.isEmpty()) Text("暂无动作模板")
+                ui.templates.forEach { template ->
+                    TextButton(
+                        onClick = {
+                            actions.selectTemplate(template.id)
+                            showTemplates = false
+                        },
+                        enabled = template.selectable,
+                    ) {
+                        Text("${template.name} · ${template.steps.size} 步" + if (template.selectable) "" else "（未完成）")
+                    }
+                }
+            }
+        }
     }
     changeTarget?.let { index ->
         AlertDialog(
@@ -269,6 +291,7 @@ private fun TaskEditScreenPreview() {
         requestPick = {},
         updateStep = {},
         add = {},
+        selectTemplate = {},
         insertBelow = { _, _ -> },
         changeType = { _, _ -> },
         runNow = {},
@@ -302,7 +325,7 @@ private fun ScriptLooksExecutable(ui: EditUi): Boolean =
     ui.steps.isNotEmpty() && ui.steps.none { it.invalid(ui.apps) }
 
 @Composable
-private fun StepCard(
+internal fun StepCard(
     index: Int,
     step: DraftStep,
     apps: List<AppOption>,
@@ -403,7 +426,7 @@ private fun StepCard(
 }
 
 @Composable
-private fun KindDialog(onPick: (StepKind) -> Unit, onDismiss: () -> Unit) {
+internal fun KindDialog(onPick: (StepKind) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择动作") },
@@ -419,7 +442,7 @@ private fun KindDialog(onPick: (StepKind) -> Unit, onDismiss: () -> Unit) {
     )
 }
 
-private fun StepKind.label(): String = when (this) {
+internal fun StepKind.label(): String = when (this) {
     StepKind.OPEN_APP -> "打开应用"
     StepKind.WAIT -> "等待"
     StepKind.TAP -> "点击"

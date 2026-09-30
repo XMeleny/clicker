@@ -33,6 +33,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.template.TemplateEditActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".exec.WakeActivity"
             android:excludeFromRecents="true"
             android:exported="false"

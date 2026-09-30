@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -34,6 +35,7 @@ import com.local.clicker.ui.list.TaskListFragment
 import com.local.clicker.ui.log.LogListFragment
 import com.local.clicker.ui.permission.PermissionActivity
 import com.local.clicker.ui.permission.permissionGate
+import com.local.clicker.ui.template.TemplateListFragment
 import com.local.clicker.ui.theme.ClickerTheme
 
 class MainActivity : FragmentActivity() {
@@ -51,7 +53,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         selectedTab = savedInstanceState?.getInt(KEY_TAB) ?: TAB_TASKS
         onBackPressedDispatcher.addCallback(this, backToTasks)
-        backToTasks.isEnabled = selectedTab == TAB_LOGS
+        backToTasks.isEnabled = selectedTab != TAB_TASKS
         setContentView(R.layout.activity_main)
         findViewById<ComposeView>(R.id.main_tabs).setContent {
             ClickerTheme { MainTabs(selectedTab, ::selectTab) }
@@ -81,16 +83,20 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun selectTab(tab: Int) {
-        val tag = if (tab == TAB_TASKS) TASKS_TAG else LOGS_TAG
+        val tag = tabTag(tab)
         val target = supportFragmentManager.findFragmentByTag(tag)
         if (target == null || tab != selectedTab) {
-            val currentTag = if (selectedTab == TAB_TASKS) TASKS_TAG else LOGS_TAG
+            val currentTag = tabTag(selectedTab)
             val current = supportFragmentManager.findFragmentByTag(currentTag)
             supportFragmentManager.beginTransaction().apply {
                 setReorderingAllowed(true)
                 if (current != null && current != target) hide(current)
                 if (target == null) {
-                    val fragment: Fragment = if (tab == TAB_TASKS) TaskListFragment() else LogListFragment()
+                    val fragment: Fragment = when (tab) {
+                        TAB_TASKS -> TaskListFragment()
+                        TAB_TEMPLATES -> TemplateListFragment()
+                        else -> LogListFragment()
+                    }
                     add(R.id.main_content, fragment, tag)
                 } else {
                     show(target)
@@ -98,15 +104,23 @@ class MainActivity : FragmentActivity() {
             }.commitNow()
         }
         selectedTab = tab
-        backToTasks.isEnabled = tab == TAB_LOGS
+        backToTasks.isEnabled = tab != TAB_TASKS
+    }
+
+    private fun tabTag(tab: Int): String = when (tab) {
+        TAB_TASKS -> TASKS_TAG
+        TAB_TEMPLATES -> TEMPLATES_TAG
+        else -> LOGS_TAG
     }
 
     companion object {
         const val EXTRA_TASK_ID = "taskId"
         private const val KEY_TAB = "selectedTab"
         private const val TAB_TASKS = 0
-        private const val TAB_LOGS = 1
+        private const val TAB_TEMPLATES = 1
+        private const val TAB_LOGS = 2
         private const val TASKS_TAG = "tasks"
+        private const val TEMPLATES_TAG = "templates"
         private const val LOGS_TAG = "logs"
 
         fun intent(context: Context, taskId: Long): Intent =
@@ -126,6 +140,12 @@ private fun MainTabs(selected: Int, onSelect: (Int) -> Unit) {
         NavigationBarItem(
             selected = selected == 1,
             onClick = { onSelect(1) },
+            icon = { Icon(Icons.Default.Build, contentDescription = null) },
+            label = { Text("动作模板") },
+        )
+        NavigationBarItem(
+            selected = selected == 2,
+            onClick = { onSelect(2) },
             icon = { Icon(Icons.Default.History, contentDescription = null) },
             label = { Text("日志") },
         )

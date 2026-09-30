@@ -5,7 +5,9 @@ import android.content.Context
 import androidx.room.Room
 import com.local.clicker.data.ClickerDatabase
 import com.local.clicker.data.MIGRATION_1_2
+import com.local.clicker.data.MIGRATION_2_3
 import com.local.clicker.data.RoomTaskRepository
+import com.local.clicker.data.RoomTemplateRepository
 import com.local.clicker.exec.Notifier
 import com.local.clicker.schedule.AlarmScheduler
 import com.local.clicker.schedule.ScheduleReconciler
@@ -33,8 +35,9 @@ class AppGraph(context: Context) {
         appContext,
         ClickerDatabase::class.java,
         "clicker.db",
-    ).addMigrations(MIGRATION_1_2).build()
+    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
     val repository = RoomTaskRepository(database.dao(), appContext.packageManager)
+    val templates = RoomTemplateRepository(database.dao(), appContext.packageManager)
     val alarms = AlarmScheduler(appContext)
     val coordinator = TaskCoordinator(repository, alarms)
     val reconciler = ScheduleReconciler(appContext, repository, alarms)

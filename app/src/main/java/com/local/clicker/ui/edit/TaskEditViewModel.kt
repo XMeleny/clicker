@@ -7,11 +7,13 @@ import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.local.clicker.ClickerApp
+import com.local.clicker.data.TemplateSummary
 import com.local.clicker.domain.DraftOpenApp
 import com.local.clicker.domain.DraftStep
 import com.local.clicker.domain.DraftTap
 import com.local.clicker.domain.DraftWait
 import com.local.clicker.domain.EditResult
+import com.local.clicker.domain.MAX_STEPS
 import com.local.clicker.domain.SaveResult
 import com.local.clicker.domain.ScriptEditor
 import com.local.clicker.domain.StepKind
@@ -41,6 +43,7 @@ data class EditUi(
     val limitHint: String? = null,
     val trialBanner: String? = null,
     val apps: List<AppOption> = emptyList(),
+    val templates: List<TemplateSummary> = emptyList(),
     val showInvalid: Boolean = false,
     val loaded: Boolean = false,
 )
@@ -75,6 +78,11 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
                 } ?: _ui.update { it.copy(loaded = true, notice = "任务不存在") }
             } else {
                 _ui.update { it.copy(loaded = true) }
+            }
+        }
+        viewModelScope.launch {
+            graph.templates.observe().collect { templates ->
+                _ui.update { it.copy(templates = templates) }
             }
         }
         viewModelScope.launch {
@@ -130,6 +138,29 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
     }
 
     fun add(kind: StepKind) = applyEdit(ScriptEditor.append(_ui.value.steps, kind))
+
+    fun selectTemplate(id: Long) {
+        viewModelScope.launch {
+            val template = graph.templates.loadSelectable(id)
+            if (template == null) {
+                Toast.makeText(getApplication(), "模板未完成或已删除", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val state = _ui.value
+            if (state.readOnly) return@launch
+            if (state.steps.size + template.steps.size > MAX_STEPS) {
+                Toast.makeText(getApplication(), "最多只能有 30 个步骤", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            _ui.update { current ->
+                if (current.readOnly || current.steps.size + template.steps.size > MAX_STEPS) return@update current
+                val added = template.steps.mapIndexed { index, step ->
+                    step.copyWithKey(ScriptEditor.newKey()).withIndex(current.steps.size + index)
+                }
+                current.copy(steps = current.steps + added, expandedKey = added.firstOrNull()?.key, showInvalid = false)
+            }
+        }
+    }
 
     fun insertBelow(index: Int, kind: StepKind) = applyEdit(ScriptEditor.insert(_ui.value.steps, index + 1, kind))
 

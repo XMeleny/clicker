@@ -65,8 +65,86 @@ data class ExecutionLogEntity(
     val trial: Boolean,
 )
 
+@Entity(tableName = "action_templates")
+data class ActionTemplateEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val updatedAt: Long,
+)
+
+@Entity(
+    tableName = "template_steps",
+    foreignKeys = [ForeignKey(
+        entity = ActionTemplateEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["templateId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("templateId")],
+)
+data class TemplateStepEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val templateId: Long,
+    val orderIndex: Int,
+    val type: String,
+    val complete: Boolean,
+    val packageName: String?,
+    val waitMs: Long?,
+    val x: Int?,
+    val y: Int?,
+    val screenWidth: Int?,
+    val screenHeight: Int?,
+    val rotation: Int?,
+)
+
 @Dao
 interface ClickerDao {
+    @Query("SELECT * FROM action_templates ORDER BY updatedAt DESC, id DESC")
+    fun observeTemplates(): Flow<List<ActionTemplateEntity>>
+
+    @Query("SELECT * FROM template_steps ORDER BY templateId ASC, orderIndex ASC")
+    fun observeTemplateSteps(): Flow<List<TemplateStepEntity>>
+
+    @Query("SELECT * FROM action_templates WHERE id = :id")
+    suspend fun getTemplate(id: Long): ActionTemplateEntity?
+
+    @Query("SELECT * FROM template_steps WHERE templateId = :id ORDER BY orderIndex ASC")
+    suspend fun templateStepsOf(id: Long): List<TemplateStepEntity>
+
+    @Insert
+    suspend fun insertTemplate(entity: ActionTemplateEntity): Long
+
+    @Transaction
+    suspend fun insertTemplateWithSteps(entity: ActionTemplateEntity, steps: List<TemplateStepEntity>): Long {
+        val id = insertTemplate(entity)
+        if (steps.isNotEmpty()) insertTemplateSteps(steps.map { it.copy(id = 0, templateId = id) })
+        return id
+    }
+
+    @Upsert
+    suspend fun upsertTemplate(entity: ActionTemplateEntity)
+
+    @Query("DELETE FROM action_templates WHERE id = :id")
+    suspend fun deleteTemplate(id: Long)
+
+    @Query("DELETE FROM template_steps WHERE templateId = :id")
+    suspend fun deleteTemplateSteps(id: Long)
+
+    @Insert
+    suspend fun insertTemplateSteps(steps: List<TemplateStepEntity>)
+
+    @Transaction
+    suspend fun replaceTemplateSteps(id: Long, steps: List<TemplateStepEntity>) {
+        deleteTemplateSteps(id)
+        if (steps.isNotEmpty()) insertTemplateSteps(steps)
+    }
+
+    @Transaction
+    suspend fun saveTemplate(entity: ActionTemplateEntity, steps: List<TemplateStepEntity>) {
+        upsertTemplate(entity)
+        replaceTemplateSteps(entity.id, steps)
+    }
+
     @Query(
         """
         SELECT * FROM tasks
@@ -129,7 +207,11 @@ interface ClickerDao {
     }
 }
 
-@Database(entities = [TaskEntity::class, StepEntity::class, ExecutionLogEntity::class], version = 2, exportSchema = false)
+@Database(
+    entities = [TaskEntity::class, StepEntity::class, ExecutionLogEntity::class, ActionTemplateEntity::class, TemplateStepEntity::class],
+    version = 3,
+    exportSchema = false,
+)
 abstract class ClickerDatabase : RoomDatabase() {
     abstract fun dao(): ClickerDao
 }
@@ -158,5 +240,13 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
             WHERE status IN ('SUCCESS', 'FAILED', 'MISSED', 'CANCELLED') AND lastMessage IS NOT NULL
             """.trimIndent(),
         )
+    }
+}
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `action_templates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL)")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS `template_steps` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `templateId` INTEGER NOT NULL, `orderIndex` INTEGER NOT NULL, `type` TEXT NOT NULL, `complete` INTEGER NOT NULL, `packageName` TEXT, `waitMs` INTEGER, `x` INTEGER, `y` INTEGER, `screenWidth` INTEGER, `screenHeight` INTEGER, `rotation` INTEGER, FOREIGN KEY(`templateId`) REFERENCES `action_templates`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_template_steps_templateId` ON `template_steps` (`templateId`)")
     }
 }
