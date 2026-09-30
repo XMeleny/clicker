@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -17,6 +18,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.local.clicker.exec.ClickerAccessibilityService
 import com.local.clicker.ui.MainActivity
 import com.local.clicker.ui.theme.ClickerTheme
+
+private const val MOCK_ACCESSIBILITY_FOR_TASK_SETUP = true
 
 class PermissionActivity : ComponentActivity() {
     private var gate = mutableStateOf(PermissionGate(false, false))
@@ -59,8 +62,9 @@ class PermissionActivity : ComponentActivity() {
 data class PermissionGate(
     val accessibility: Boolean,
     val alarms: Boolean,
+    val mockAccessibility: Boolean = false,
 ) {
-    val ready: Boolean = accessibility
+    val ready: Boolean = accessibility || mockAccessibility
 }
 
 fun permissionGate(context: Context): PermissionGate {
@@ -73,7 +77,10 @@ fun permissionGate(context: Context): PermissionGate {
             }
         }
     val alarms = context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
-    return PermissionGate(enabled, alarms)
+    // Temporary debug-only gate bypass for testing task setup without reauthorizing accessibility.
+    val mockAccessibility = MOCK_ACCESSIBILITY_FOR_TASK_SETUP &&
+        (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    return PermissionGate(enabled, alarms, mockAccessibility)
 }
 
 @Preview(showBackground = true)
