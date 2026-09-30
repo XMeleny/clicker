@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.kotlinx.coroutines.android)
+    testImplementation("junit:junit:4.13.2")
 }
 
 val debugAdb = androidComponents.sdkComponents.adb
