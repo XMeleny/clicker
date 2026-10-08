@@ -146,13 +146,13 @@ internal fun TaskListContent(
     pendingDelete?.let { id ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("删除任务") },
-            text = { Text("删除后闹钟也会取消。") },
+            title = { Text("删除并取消") },
+            text = { Text("任务将被删除，已安排的计划也会取消。") },
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(id)
                     pendingDelete = null
-                }) { Text("删除") }
+                }) { Text("删除并取消") }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("留下") } },
         )
@@ -210,11 +210,10 @@ private fun TaskRow(
                         Text("${index + 1}. $step", style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                if (task.status != TaskStatus.RUNNING) TextButton(onClick = onDelete) { Text("删除") }
             }
             val canRun = task.executable &&
                 (task.status == TaskStatus.DRAFT || task.status == TaskStatus.SCHEDULED) && !busy
-            if (canRun || task.status == TaskStatus.SCHEDULED) {
+            if (task.status != TaskStatus.RUNNING) {
                 Column(Modifier.width(104.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (canRun) OutlinedButton(
                         onClick = onRun,
@@ -233,6 +232,14 @@ private fun TaskRow(
                         ) {
                             Text("取消计划")
                         }
+                    }
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.fillMaxWidth().height(32.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    ) {
+                        Text("删除并取消", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
