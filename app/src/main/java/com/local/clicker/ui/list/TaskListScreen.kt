@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -215,11 +216,21 @@ private fun TaskRow(
                 (task.status == TaskStatus.DRAFT || task.status == TaskStatus.SCHEDULED) && !busy
             if (canRun || task.status == TaskStatus.SCHEDULED) {
                 Column(Modifier.width(104.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (canRun) OutlinedButton(onClick = onRun, modifier = Modifier.fillMaxWidth()) {
+                    if (canRun) OutlinedButton(
+                        onClick = onRun,
+                        modifier = Modifier.fillMaxWidth().height(32.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    ) {
                         Text("立即执行")
                     }
                     if (task.status == TaskStatus.SCHEDULED) {
-                        OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = onCancel,
+                            modifier = Modifier.fillMaxWidth().height(32.dp),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        ) {
                             Text("取消计划")
                         }
                     }
