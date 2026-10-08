@@ -44,7 +44,7 @@ import com.local.clicker.ui.theme.ClickerTheme
 
 class MainActivity : FragmentActivity() {
     private var selectedTab by mutableIntStateOf(TAB_TASKS)
-    private var gate by mutableStateOf(PermissionGate(false, false))
+    private var gate by mutableStateOf(PermissionGate(false, false, false))
     private val backToTasks = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = selectTab(TAB_TASKS)
     }
@@ -69,6 +69,10 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshPermissions()
+    }
+
+    fun refreshPermissions() {
         gate = permissionGate(this)
     }
 
@@ -178,7 +182,7 @@ private fun MainActivityPreview() {
                     onDelete = {},
                 )
             }
-            MainTabs(1, PermissionGate(true, true), {})
+            MainTabs(1, PermissionGate(true, true, true), {})
         }
     }
 }
