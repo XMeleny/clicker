@@ -143,7 +143,9 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
     var showTemplates by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .heightIn(min = 64.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextField(
