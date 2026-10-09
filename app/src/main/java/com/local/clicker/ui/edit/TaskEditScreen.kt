@@ -1,10 +1,13 @@
 package com.local.clicker.ui.edit
 
 import android.widget.NumberPicker
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,11 +17,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.AlertDialog
@@ -44,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalContext
@@ -147,70 +152,64 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             titlePlaceholder = "任务名",
             titleEnabled = !ui.readOnly,
         )
-        Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            ui.limitHint?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            ui.trialBanner?.let { Text("试运行：$it") }
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("计划时间", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    ui.scheduledAt?.let(::formatScheduleDate) ?: "??月??日",
-                    modifier = Modifier.clickable(enabled = !ui.readOnly) { showDate = true }
-                        .padding(horizontal = 8.dp, vertical = 12.dp),
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                )
-                Text(
-                    ui.scheduledAt?.let(::formatScheduleTime) ?: "??:??",
-                    modifier = Modifier.clickable(enabled = !ui.readOnly) { showTime = true }
-                        .padding(vertical = 12.dp),
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                )
-                Spacer(Modifier.weight(1f))
-                if (!ui.readOnly) IconButton(
-                    onClick = { actions.setScheduledAt(null) },
-                    enabled = ui.scheduledAt != null,
-                ) { Icon(Icons.Default.DeleteOutline, contentDescription = "删除计划时间") }
+            ui.notice?.let { notice -> item { Text(notice, color = MaterialTheme.colorScheme.error) } }
+            ui.limitHint?.let { hint -> item { Text(hint, color = MaterialTheme.colorScheme.error) } }
+            ui.trialBanner?.let { banner -> item { Text("试运行：$banner") } }
+            item {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("计划时间", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        ui.scheduledAt?.let(::formatScheduleDate) ?: "??月??日",
+                        modifier = Modifier.clickable(enabled = !ui.readOnly) { showDate = true }
+                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                    )
+                    Text(
+                        ui.scheduledAt?.let(::formatScheduleTime) ?: "??:??",
+                        modifier = Modifier.clickable(enabled = !ui.readOnly) { showTime = true }
+                            .padding(vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    if (!ui.readOnly) IconButton(
+                        onClick = { actions.setScheduledAt(null) },
+                        enabled = ui.scheduledAt != null,
+                    ) { Icon(Icons.Default.DeleteOutline, contentDescription = "删除计划时间") }
+                }
             }
-            Row(
-                Modifier.fillMaxWidth().height(48.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("脚本按从上到下的顺序执行", modifier = Modifier.weight(1f))
-                if (!ui.readOnly) IconButton(
-                    onClick = { showAdd = true },
-                    enabled = ui.steps.size < 30,
-                ) { Icon(Icons.Default.AddCircleOutline, contentDescription = "添加步骤") }
-            }
-            ui.steps.forEachIndexed { index, step ->
-                StepRow(
-                    step = step,
-                    apps = ui.apps,
-                    readOnly = ui.readOnly,
-                    invalid = ui.showInvalid && step.invalid(ui.apps),
-                    onMove = { delta -> actions.move(step.key, delta) },
-                    onRemove = { actions.remove(index) },
-                    onEdit = {
+            actionStepList(
+                steps = ui.steps,
+                apps = ui.apps,
+                readOnly = ui.readOnly,
+                invalid = { ui.showInvalid && it.invalid(ui.apps) },
+                actions = ActionStepListActions(
+                    add = { showAdd = true },
+                    move = actions.move,
+                    remove = actions.remove,
+                    edit = { step ->
                         when (step) {
                             is DraftOpenApp -> pickingApp = step.key
                             is DraftWait -> editingWait = step
                             is DraftTap -> actions.requestPick(step.key)
                         }
                     },
-                )
-            }
+                ),
+            )
             if (ui.taskId > 0L && !ui.readOnly && ScriptLooksExecutable(ui)) {
-                Button(onClick = actions.runNow, enabled = !busy) { Text("立即执行") }
+                item { Button(onClick = actions.runNow, enabled = !busy) { Text("立即执行") } }
             }
             if (ui.status == TaskStatus.SCHEDULED) {
-                TextButton(onClick = actions.cancelSchedule) { Text("取消计划") }
+                item { TextButton(onClick = actions.cancelSchedule) { Text("取消计划") } }
             }
         }
     }
@@ -345,21 +344,27 @@ internal fun StepRow(
     var dragging by remember { mutableStateOf(false) }
     var accum by remember { mutableFloatStateOf(0f) }
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
+    val dragBackground by animateColorAsState(
+        if (dragging) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        label = "stepDragBackground",
+    )
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).pointerInput(step.key, readOnly) {
-            if (readOnly) return@pointerInput
-            detectDragGesturesAfterLongPress(
-                onDragStart = { dragging = true },
-                onDragEnd = { dragging = false; accum = 0f },
-                onDragCancel = { dragging = false; accum = 0f },
-                onDrag = { change, amount ->
-                    change.consume()
-                    accum += amount.y
-                    if (accum > threshold) { onMove(1); accum = 0f }
-                    if (accum < -threshold) { onMove(-1); accum = 0f }
-                },
-            )
-        },
+        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            .background(dragBackground, RoundedCornerShape(6.dp))
+            .pointerInput(step.key, readOnly) {
+                if (readOnly) return@pointerInput
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { dragging = true },
+                    onDragEnd = { dragging = false; accum = 0f },
+                    onDragCancel = { dragging = false; accum = 0f },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        accum += amount.y
+                        if (accum > threshold) { onMove(1); accum = 0f }
+                        if (accum < -threshold) { onMove(-1); accum = 0f }
+                    },
+                )
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

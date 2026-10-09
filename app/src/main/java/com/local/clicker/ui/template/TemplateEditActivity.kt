@@ -11,19 +11,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,7 +26,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -57,8 +49,9 @@ import com.local.clicker.ui.AppTitleBar
 import com.local.clicker.ui.TitleBarAction
 import com.local.clicker.ui.edit.AppOption
 import com.local.clicker.ui.edit.AppPickerDialog
-import com.local.clicker.ui.edit.StepRow
+import com.local.clicker.ui.edit.ActionStepListActions
 import com.local.clicker.ui.edit.WaitDialog
+import com.local.clicker.ui.edit.actionStepList
 import com.local.clicker.ui.edit.invalid
 import com.local.clicker.ui.edit.label
 import com.local.clicker.ui.theme.ClickerTheme
@@ -196,43 +189,34 @@ private fun TemplateEditContent(ui: TemplateEditUi, onSave: () -> Unit, vm: Temp
             titlePlaceholder = "模板名",
             titleEnabled = vm != null,
         )
-        Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ui.limitHint?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Row(
-                Modifier.fillMaxWidth().height(48.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("脚本按从上到下的顺序执行", modifier = Modifier.weight(1f))
-                if (vm != null) IconButton(
-                    onClick = { kindTarget = ui.steps.size },
-                    enabled = ui.steps.size < 30,
-                ) { Icon(Icons.Default.AddCircleOutline, contentDescription = "添加步骤") }
-            }
-            ui.steps.forEachIndexed { index, step ->
-                StepRow(
-                    step = step,
-                    apps = ui.apps,
-                    readOnly = vm == null,
-                    invalid = step.invalid(ui.apps),
-                    onMove = { vm?.move(step.key, it) },
-                    onRemove = { vm?.remove(index) },
-                    onEdit = {
+            ui.limitHint?.let { hint -> item { Text(hint, color = MaterialTheme.colorScheme.error) } }
+            actionStepList(
+                steps = ui.steps,
+                apps = ui.apps,
+                readOnly = vm == null,
+                invalid = { it.invalid(ui.apps) },
+                actions = ActionStepListActions(
+                    add = { kindTarget = ui.steps.size },
+                    move = { key, delta -> vm?.move(key, delta) },
+                    remove = { vm?.remove(it) },
+                    edit = { step ->
                         when (step) {
                             is DraftOpenApp -> pickingApp = step.key
                             is DraftWait -> editingWait = step
                             is DraftTap -> vm?.requestPick(step.key)
                         }
                     },
-                    onDuplicate = { vm?.duplicate(index) },
-                    onInsert = { kindTarget = index },
-                    onChangeType = { changeTarget = index },
-                    onMoveUp = if (index > 0) ({ vm?.move(step.key, -1) }) else null,
-                    onMoveDown = if (index < ui.steps.lastIndex) ({ vm?.move(step.key, 1) }) else null,
-                )
-            }
+                    duplicate = { vm?.duplicate(it) },
+                    insert = { kindTarget = it },
+                    changeType = { changeTarget = it },
+                    showMoveActions = true,
+                ),
+            )
         }
     }
     kindTarget?.let { index ->
