@@ -1,7 +1,7 @@
 package com.local.clicker.ui.edit
 
 import android.widget.NumberPicker
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,23 +10,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -43,10 +47,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
@@ -64,8 +70,6 @@ import com.local.clicker.domain.WAIT_MIN_MS
 import com.local.clicker.domain.formatWaitSeconds
 import com.local.clicker.domain.parseWaitSeconds
 import com.local.clicker.exec.ClickerRuntimeService
-import com.local.clicker.ui.AppTitleBar
-import com.local.clicker.ui.TitleBarAction
 import com.local.clicker.ui.theme.ClickerTheme
 import java.time.Instant
 import java.time.ZoneId
@@ -100,17 +104,12 @@ fun TaskEditScreen(
             save = { vm.save(onBack, onReplaced, onAlarmPermissionRequired) },
             setName = vm::setName,
             setScheduledAt = vm::setScheduledAt,
-            toggle = vm::toggle,
             move = vm::moveKey,
             remove = vm::remove,
-            duplicate = vm::duplicate,
-            trial = { vm.trial(it, onReplaced) },
             requestPick = vm::requestPick,
             updateStep = vm::updateStep,
             add = vm::add,
             selectTemplate = vm::selectTemplate,
-            insertBelow = vm::insertBelow,
-            changeType = vm::changeType,
             runNow = { vm.runNow(onReplaced) },
             cancelSchedule = { vm.cancelSchedule(onBack) },
         ),
@@ -121,17 +120,12 @@ private data class EditActions(
     val save: () -> Unit,
     val setName: (String) -> Unit,
     val setScheduledAt: (Long?) -> Unit,
-    val toggle: (Long) -> Unit,
     val move: (Long, Int) -> Unit,
     val remove: (Int) -> Unit,
-    val duplicate: (Int) -> Unit,
-    val trial: (Int) -> Unit,
     val requestPick: (Long) -> Unit,
     val updateStep: (DraftStep) -> Unit,
     val add: (StepKind) -> Unit,
     val selectTemplate: (Long) -> Unit,
-    val insertBelow: (Int, StepKind) -> Unit,
-    val changeType: (Int, StepKind) -> Unit,
     val runNow: () -> Unit,
     val cancelSchedule: () -> Unit,
 )
@@ -139,72 +133,74 @@ private data class EditActions(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
-    var kindTarget by remember { mutableStateOf<KindTarget?>(null) }
-    var changeTarget by remember { mutableStateOf<Int?>(null) }
+    var showAdd by remember { mutableStateOf(false) }
     var pickingApp by remember { mutableStateOf<Long?>(null) }
+    var editingWait by remember { mutableStateOf<DraftWait?>(null) }
+    var showScheduleOptions by remember { mutableStateOf(false) }
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
     var showTemplates by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        AppTitleBar(
-            title = if (ui.taskId == 0L) "新任务" else ui.name.ifBlank { "任务" },
-            action = if (ui.readOnly) null else TitleBarAction("保存", actions.save),
-        )
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextField(
+                value = ui.name,
+                onValueChange = actions.setName,
+                placeholder = { Text("任务名") },
+                enabled = !ui.readOnly,
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                textStyle = MaterialTheme.typography.titleLarge,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                ),
+            )
+            if (!ui.readOnly) TextButton(onClick = actions.save) { Text("保存") }
+        }
+        HorizontalDivider()
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             ui.limitHint?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             ui.trialBanner?.let { Text("试运行：$it") }
-            OutlinedTextField(
-                value = ui.name,
-                onValueChange = actions.setName,
-                label = { Text("名称") },
-                enabled = !ui.readOnly,
-                modifier = Modifier.fillMaxWidth(),
+            Text(
+                ui.scheduledAt?.let { "计划时间 ${formatWhen(it)}" } ?: "计划时间：仅手动",
+                modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.readOnly) { showScheduleOptions = true }
+                    .padding(vertical = 12.dp),
+                style = MaterialTheme.typography.bodyLarge,
             )
-            Text(ui.scheduledAt?.let { "计划时间 ${formatWhen(it)}" } ?: "计划时间：仅手动")
-            if (!ui.readOnly) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { showDate = true }) { Text("选择日期") }
-                    TextButton(onClick = { showTime = true }) { Text("选择时间") }
-                }
-                TextButton(onClick = { actions.setScheduledAt(null) }) { Text("清除时间") }
+            Row(
+                Modifier.fillMaxWidth().height(48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("脚本按从上到下的顺序执行", modifier = Modifier.weight(1f))
+                if (!ui.readOnly) IconButton(
+                    onClick = { showAdd = true },
+                    enabled = ui.steps.size < 30,
+                ) { Icon(Icons.Default.AddCircleOutline, contentDescription = "添加步骤") }
             }
-            Text("脚本按从上到下的顺序执行")
             ui.steps.forEachIndexed { index, step ->
-                StepCard(
-                    index = index,
+                StepRow(
                     step = step,
                     apps = ui.apps,
-                    expanded = ui.expandedKey == step.key,
                     readOnly = ui.readOnly,
                     invalid = ui.showInvalid && step.invalid(ui.apps),
-                    isFirst = index == 0,
-                    isLast = index == ui.steps.lastIndex,
-                    busy = busy,
-                    saved = ui.taskId > 0L,
-                    onToggle = { actions.toggle(step.key) },
                     onMove = { delta -> actions.move(step.key, delta) },
                     onRemove = { actions.remove(index) },
-                    onDuplicate = { actions.duplicate(index) },
-                    onInsert = { kindTarget = KindTarget.Insert(index) },
-                    onChangeType = { changeTarget = index },
-                    onTrial = { actions.trial(index) },
-                    onPick = { actions.requestPick(step.key) },
-                    onPickApp = { pickingApp = step.key },
-                    onWait = { text ->
-                        val parsed = parseWaitSeconds(text)
-                        actions.updateStep(DraftWait(step.key, step.orderIndex, parsed))
+                    onEdit = {
+                        when (step) {
+                            is DraftOpenApp -> pickingApp = step.key
+                            is DraftWait -> editingWait = step
+                            is DraftTap -> actions.requestPick(step.key)
+                        }
                     },
                 )
-            }
-            if (!ui.readOnly) {
-                Button(
-                    onClick = { showTemplates = true },
-                    enabled = ui.steps.size < 30,
-                ) { Text("选择动作模板") }
             }
             if (ui.taskId > 0L && !ui.readOnly && ScriptLooksExecutable(ui)) {
                 Button(onClick = actions.runNow, enabled = !busy) { Text("立即执行") }
@@ -214,16 +210,35 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             }
         }
     }
-    kindTarget?.let { target ->
-        KindDialog(
-            onPick = { kind ->
-                when (target) {
-                    KindTarget.Append -> actions.add(kind)
-                    is KindTarget.Insert -> actions.insertBelow(target.index, kind)
+    if (showAdd) {
+        AlertDialog(
+            onDismissRequest = { showAdd = false },
+            title = { Text("添加步骤") },
+            text = {
+                Column {
+                    TextButton(onClick = { showAdd = false; showTemplates = true }) { Text("选择动作模板") }
+                    StepKind.entries.forEach { kind ->
+                        TextButton(onClick = { actions.add(kind); showAdd = false }) { Text(kind.label()) }
+                    }
                 }
-                kindTarget = null
             },
-            onDismiss = { kindTarget = null },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showAdd = false }) { Text("取消") } },
+        )
+    }
+    if (showScheduleOptions) {
+        AlertDialog(
+            onDismissRequest = { showScheduleOptions = false },
+            title = { Text("计划时间") },
+            text = {
+                Column {
+                    TextButton(onClick = { showScheduleOptions = false; showDate = true }) { Text("选择日期") }
+                    TextButton(onClick = { showScheduleOptions = false; showTime = true }) { Text("选择时间") }
+                    TextButton(onClick = { actions.setScheduledAt(null); showScheduleOptions = false }) { Text("清除时间") }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showScheduleOptions = false }) { Text("取消") } },
         )
     }
     if (showTemplates) {
@@ -245,35 +260,30 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             }
         }
     }
-    changeTarget?.let { index ->
-        AlertDialog(
-            onDismissRequest = { changeTarget = null },
-            title = { Text("更换类型") },
-            text = { Text("更换后这一步已填写的内容会丢掉。") },
-            confirmButton = {
-                Column {
-                    StepKind.entries.forEach { kind ->
-                        TextButton(onClick = {
-                            actions.changeType(index, kind)
-                            changeTarget = null
-                        }) { Text(kind.label()) }
-                    }
-                }
-            },
-            dismissButton = { TextButton(onClick = { changeTarget = null }) { Text("留下") } },
+    editingWait?.let { step ->
+        WaitDialog(
+            step = step,
+            onConfirm = { actions.updateStep(DraftWait(step.key, step.orderIndex, it)); editingWait = null },
+            onDismiss = { editingWait = null },
         )
     }
     pickingApp?.let { key ->
-        ModalBottomSheet(onDismissRequest = { pickingApp = null }, sheetState = rememberModalBottomSheetState()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ui.apps.forEach { app ->
-                    TextButton(onClick = {
-                        actions.updateStep(DraftOpenApp(key, 0, app.packageName))
-                        pickingApp = null
-                    }) { Text(app.label) }
+        AlertDialog(
+            onDismissRequest = { pickingApp = null },
+            title = { Text("选择应用") },
+            text = {
+                Column(Modifier.height(320.dp).verticalScroll(rememberScrollState())) {
+                    ui.apps.forEach { app ->
+                        TextButton(onClick = {
+                            actions.updateStep(DraftOpenApp(key, 0, app.packageName))
+                            pickingApp = null
+                        }) { Text(app.label) }
+                    }
                 }
-            }
-        }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { pickingApp = null }) { Text("取消") } },
+        )
     }
     if (showDate) {
         ScheduleDateDialog(
@@ -304,17 +314,12 @@ private fun TaskEditScreenPreview() {
         save = {},
         setName = {},
         setScheduledAt = {},
-        toggle = {},
         move = { _, _ -> },
         remove = {},
-        duplicate = {},
-        trial = {},
         requestPick = {},
         updateStep = {},
         add = {},
         selectTemplate = {},
-        insertBelow = { _, _ -> },
-        changeType = { _, _ -> },
         runNow = {},
         cancelSchedule = {},
     )
@@ -337,132 +342,86 @@ private fun TaskEditScreenPreview() {
     }
 }
 
-private sealed interface KindTarget {
-    data object Append : KindTarget
-    data class Insert(val index: Int) : KindTarget
-}
-
 private fun ScriptLooksExecutable(ui: EditUi): Boolean =
     ui.steps.isNotEmpty() && ui.steps.none { it.invalid(ui.apps) }
 
 @Composable
-internal fun StepCard(
-    index: Int,
+private fun StepRow(
     step: DraftStep,
     apps: List<AppOption>,
-    expanded: Boolean,
     readOnly: Boolean,
     invalid: Boolean,
-    isFirst: Boolean,
-    isLast: Boolean,
-    busy: Boolean,
-    saved: Boolean,
-    onToggle: () -> Unit,
     onMove: (Int) -> Unit,
     onRemove: () -> Unit,
-    onDuplicate: () -> Unit,
-    onInsert: () -> Unit,
-    onChangeType: () -> Unit,
-    onTrial: () -> Unit,
-    onPick: () -> Unit,
-    onPickApp: () -> Unit,
-    onWait: (String) -> Unit,
+    onEdit: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var accum by remember { mutableFloatStateOf(0f) }
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
-    val border = if (invalid || dragging) MaterialTheme.colorScheme.error else Color.Transparent
-    Card(Modifier.fillMaxWidth().border(1.dp, border)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row {
-                Text(
-                    "${index + 1}",
-                    modifier = Modifier.pointerInput(step.key, readOnly) {
-                        if (readOnly) return@pointerInput
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { dragging = true },
-                            onDragEnd = { dragging = false; accum = 0f },
-                            onDragCancel = { dragging = false; accum = 0f },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                accum += amount.y
-                                if (accum > threshold) {
-                                    onMove(1)
-                                    accum = 0f
-                                } else if (accum < -threshold) {
-                                    onMove(-1)
-                                    accum = 0f
-                                }
-                            },
-                        )
-                    },
-                )
-                if (!readOnly) Icon(Icons.Default.DragHandle, contentDescription = "拖拽排序")
-                Text(
-                    step.summary(apps),
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                )
-                TextButton(onClick = onToggle) { Text(if (expanded) "收起" else "展开") }
-                if (!readOnly) {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "步骤菜单") }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        if (!isFirst) DropdownMenuItem(text = { Text("上移") }, onClick = { menu = false; onMove(-1) })
-                        if (!isLast) DropdownMenuItem(text = { Text("下移") }, onClick = { menu = false; onMove(1) })
-                        DropdownMenuItem(text = { Text("复制") }, onClick = { menu = false; onDuplicate() })
-                        DropdownMenuItem(text = { Text("删除") }, onClick = { menu = false; onRemove() })
-                        DropdownMenuItem(text = { Text("在下方插入") }, onClick = { menu = false; onInsert() })
-                        DropdownMenuItem(text = { Text("更换类型") }, onClick = { menu = false; onChangeType() })
-                    }
-                }
-            }
-            if (expanded) {
-                when (step) {
-                    is DraftOpenApp -> TextButton(onClick = onPickApp, enabled = !readOnly) {
-                        Text(step.summary(apps))
-                    }
-                    is DraftWait -> {
-                        var waitSeconds by remember(step.key) {
-                            mutableStateOf(step.waitMs?.let(::formatWaitSeconds).orEmpty())
-                        }
-                        OutlinedTextField(
-                            value = waitSeconds,
-                            onValueChange = { waitSeconds = it; onWait(it) },
-                            enabled = !readOnly,
-                            label = { Text("等待时间（秒）") },
-                            supportingText = { Text("允许 ${formatWaitSeconds(WAIT_MIN_MS)}～${formatWaitSeconds(WAIT_MAX_MS)} 秒") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        )
-                    }
-                    is DraftTap -> {
-                        val point = step.tap
-                        Text(
-                            if (point == null) "点击?" else "点击 (${point.x}, ${point.y})  ${point.screenWidth}×${point.screenHeight} / ${point.rotation}",
-                        )
-                        if (!readOnly) TextButton(onClick = onPick) { Text("选取坐标") }
-                    }
-                }
-                if (saved && step.isComplete() && !busy) {
-                    TextButton(onClick = onTrial) { Text("试运行这一步") }
-                }
+    Row(
+        Modifier.fillMaxWidth().height(52.dp).pointerInput(step.key, readOnly) {
+            if (readOnly) return@pointerInput
+            detectDragGesturesAfterLongPress(
+                onDragStart = { dragging = true },
+                onDragEnd = { dragging = false; accum = 0f },
+                onDragCancel = { dragging = false; accum = 0f },
+                onDrag = { change, amount ->
+                    change.consume()
+                    accum += amount.y
+                    if (accum > threshold) { onMove(1); accum = 0f }
+                    if (accum < -threshold) { onMove(-1); accum = 0f }
+                },
+            )
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            step.summary(apps),
+            modifier = Modifier.weight(1f).clickable(enabled = !readOnly, onClick = onEdit)
+                .padding(vertical = 14.dp),
+            color = if (invalid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (!readOnly) {
+            Icon(
+                Icons.Default.DragHandle,
+                contentDescription = "长按拖拽排序",
+                modifier = Modifier.size(40.dp),
+                tint = if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreHoriz, contentDescription = "步骤选项") }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("删除") }, onClick = { menu = false; onRemove() })
             }
         }
     }
 }
 
 @Composable
-internal fun KindDialog(onPick: (StepKind) -> Unit, onDismiss: () -> Unit) {
+private fun WaitDialog(step: DraftWait, onConfirm: (Long?) -> Unit, onDismiss: () -> Unit) {
+    var seconds by remember(step.key) { mutableStateOf(step.waitMs?.let(::formatWaitSeconds).orEmpty()) }
+    val waitMs = parseWaitSeconds(seconds)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择动作") },
+        title = { Text("等待时间") },
         text = {
-            Column {
-                StepKind.entries.forEach { kind ->
-                    TextButton(onClick = { onPick(kind) }) { Text(kind.label()) }
-                }
-            }
+            OutlinedTextField(
+                value = seconds,
+                onValueChange = { seconds = it },
+                label = { Text("秒") },
+                supportingText = { Text("允许 ${formatWaitSeconds(WAIT_MIN_MS)}～${formatWaitSeconds(WAIT_MAX_MS)} 秒") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true,
+            )
         },
-        confirmButton = {},
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(waitMs) },
+                enabled = waitMs != null && waitMs in WAIT_MIN_MS..WAIT_MAX_MS,
+            ) { Text("确定") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
