@@ -14,24 +14,33 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -48,14 +57,12 @@ import com.local.clicker.domain.DraftWait
 import com.local.clicker.domain.EditResult
 import com.local.clicker.domain.ScriptEditor
 import com.local.clicker.domain.StepKind
-import com.local.clicker.domain.parseWaitSeconds
 import com.local.clicker.exec.ClickerAccessibilityService
 import com.local.clicker.exec.PickerBus
-import com.local.clicker.ui.AppTitleBar
-import com.local.clicker.ui.TitleBarAction
 import com.local.clicker.ui.edit.AppOption
-import com.local.clicker.ui.edit.KindDialog
-import com.local.clicker.ui.edit.StepCard
+import com.local.clicker.ui.edit.AppPickerDialog
+import com.local.clicker.ui.edit.StepRow
+import com.local.clicker.ui.edit.WaitDialog
 import com.local.clicker.ui.edit.invalid
 import com.local.clicker.ui.edit.label
 import com.local.clicker.ui.theme.ClickerTheme
@@ -85,7 +92,6 @@ class TemplateEditActivity : ComponentActivity() {
 data class TemplateEditUi(
     val name: String = "未命名模板",
     val steps: List<DraftStep> = emptyList(),
-    val expandedKey: Long? = null,
     val apps: List<AppOption> = emptyList(),
     val limitHint: String? = null,
     val loaded: Boolean = false,
@@ -115,7 +121,6 @@ class TemplateEditViewModel(app: Application, private val id: Long) : AndroidVie
                     is PickerBus.Event.Point -> _ui.update {
                         it.copy(
                             steps = ScriptEditor.update(it.steps, event.key, DraftTap(event.key, 0, event.point)),
-                            expandedKey = event.key,
                         )
                     }
                     is PickerBus.Event.Failed -> toast(event.message)
@@ -125,7 +130,6 @@ class TemplateEditViewModel(app: Application, private val id: Long) : AndroidVie
     }
 
     fun setName(value: String) = _ui.update { it.copy(name = value.take(40)) }
-    fun toggle(key: Long) = _ui.update { it.copy(expandedKey = if (it.expandedKey == key) null else key) }
     fun add(kind: StepKind) = applyEdit(ScriptEditor.append(_ui.value.steps, kind))
     fun insert(index: Int, kind: StepKind) = applyEdit(ScriptEditor.insert(_ui.value.steps, index + 1, kind))
     fun duplicate(index: Int) = applyEdit(ScriptEditor.duplicate(_ui.value.steps, index))
@@ -157,7 +161,7 @@ class TemplateEditViewModel(app: Application, private val id: Long) : AndroidVie
     private fun applyEdit(result: EditResult) {
         when (result) {
             is EditResult.Updated -> _ui.update {
-                it.copy(steps = result.steps, expandedKey = result.focusKey ?: it.expandedKey, limitHint = null)
+                it.copy(steps = result.steps, limitHint = null)
             }
             is EditResult.AtLimit -> _ui.update { it.copy(limitHint = "已达 30 步上限") }
         }
@@ -187,55 +191,86 @@ private fun TemplateEditContent(ui: TemplateEditUi, onSave: () -> Unit, vm: Temp
     var kindTarget by remember { mutableStateOf<Int?>(null) }
     var changeTarget by remember { mutableStateOf<Int?>(null) }
     var pickingApp by remember { mutableStateOf<Long?>(null) }
+    var editingWait by remember { mutableStateOf<DraftWait?>(null) }
     Column(Modifier.fillMaxSize()) {
-        AppTitleBar(if (ui.name.isBlank()) "动作模板" else ui.name, TitleBarAction("保存", onSave))
-        Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .heightIn(min = 64.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedTextField(
+            TextField(
                 value = ui.name,
                 onValueChange = { vm?.setName(it) },
-                label = { Text("模板名称") },
-                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("模板名") },
+                enabled = vm != null,
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                textStyle = MaterialTheme.typography.titleLarge,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                ),
             )
-            ui.limitHint?.let { Text(it) }
+            if (vm != null) TextButton(onClick = onSave) { Text("保存") }
+        }
+        HorizontalDivider()
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ui.limitHint?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Row(
+                Modifier.fillMaxWidth().height(48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("脚本按从上到下的顺序执行", modifier = Modifier.weight(1f))
+                if (vm != null) IconButton(
+                    onClick = { kindTarget = ui.steps.size },
+                    enabled = ui.steps.size < 30,
+                ) { Icon(Icons.Default.AddCircleOutline, contentDescription = "添加步骤") }
+            }
             ui.steps.forEachIndexed { index, step ->
-                StepCard(
-                    index = index,
+                StepRow(
                     step = step,
                     apps = ui.apps,
-                    expanded = ui.expandedKey == step.key,
                     readOnly = vm == null,
                     invalid = step.invalid(ui.apps),
-                    isFirst = index == 0,
-                    isLast = index == ui.steps.lastIndex,
-                    busy = false,
-                    saved = false,
-                    onToggle = { vm?.toggle(step.key) },
                     onMove = { vm?.move(step.key, it) },
                     onRemove = { vm?.remove(index) },
+                    onEdit = {
+                        when (step) {
+                            is DraftOpenApp -> pickingApp = step.key
+                            is DraftWait -> editingWait = step
+                            is DraftTap -> vm?.requestPick(step.key)
+                        }
+                    },
                     onDuplicate = { vm?.duplicate(index) },
                     onInsert = { kindTarget = index },
                     onChangeType = { changeTarget = index },
-                    onTrial = {},
-                    onPick = { vm?.requestPick(step.key) },
-                    onPickApp = { pickingApp = step.key },
-                    onWait = { vm?.updateStep(DraftWait(step.key, 0, parseWaitSeconds(it))) },
+                    onMoveUp = if (index > 0) ({ vm?.move(step.key, -1) }) else null,
+                    onMoveDown = if (index < ui.steps.lastIndex) ({ vm?.move(step.key, 1) }) else null,
                 )
-            }
-            Button(onClick = { kindTarget = ui.steps.size }, enabled = ui.steps.size < 30) {
-                Text("添加步骤")
             }
         }
     }
     kindTarget?.let { index ->
-        KindDialog(
-            onPick = { kind ->
-                if (index == ui.steps.size) vm?.add(kind) else vm?.insert(index, kind)
-                kindTarget = null
+        AlertDialog(
+            onDismissRequest = { kindTarget = null },
+            title = { Text("添加步骤") },
+            text = {
+                Column {
+                    StepKind.entries.forEach { kind ->
+                        TextButton(onClick = {
+                            if (index == ui.steps.size) vm?.add(kind) else vm?.insert(index, kind)
+                            kindTarget = null
+                        }) { Text(kind.label()) }
+                    }
+                }
             },
-            onDismiss = { kindTarget = null },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { kindTarget = null }) { Text("取消") } },
         )
     }
     changeTarget?.let { index ->
@@ -255,17 +290,22 @@ private fun TemplateEditContent(ui: TemplateEditUi, onSave: () -> Unit, vm: Temp
             dismissButton = { TextButton(onClick = { changeTarget = null }) { Text("留下") } },
         )
     }
+    editingWait?.let { step ->
+        WaitDialog(
+            step = step,
+            onConfirm = { vm?.updateStep(DraftWait(step.key, step.orderIndex, it)); editingWait = null },
+            onDismiss = { editingWait = null },
+        )
+    }
     pickingApp?.let { key ->
-        ModalBottomSheet(onDismissRequest = { pickingApp = null }, sheetState = rememberModalBottomSheetState()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ui.apps.forEach { app ->
-                    TextButton(onClick = {
-                        vm?.updateStep(DraftOpenApp(key, 0, app.packageName))
-                        pickingApp = null
-                    }) { Text(app.label) }
-                }
-            }
-        }
+        AppPickerDialog(
+            apps = ui.apps,
+            onPick = { packageName ->
+                vm?.updateStep(DraftOpenApp(key, 0, packageName))
+                pickingApp = null
+            },
+            onDismiss = { pickingApp = null },
+        )
     }
 }
 

@@ -276,21 +276,13 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
         )
     }
     pickingApp?.let { key ->
-        AlertDialog(
-            onDismissRequest = { pickingApp = null },
-            title = { Text("选择应用") },
-            text = {
-                Column(Modifier.height(320.dp).verticalScroll(rememberScrollState())) {
-                    ui.apps.forEach { app ->
-                        TextButton(onClick = {
-                            actions.updateStep(DraftOpenApp(key, 0, app.packageName))
-                            pickingApp = null
-                        }) { Text(app.label) }
-                    }
-                }
+        AppPickerDialog(
+            apps = ui.apps,
+            onPick = { packageName ->
+                actions.updateStep(DraftOpenApp(key, 0, packageName))
+                pickingApp = null
             },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { pickingApp = null }) { Text("取消") } },
+            onDismiss = { pickingApp = null },
         )
     }
     if (showDate) {
@@ -354,7 +346,7 @@ private fun ScriptLooksExecutable(ui: EditUi): Boolean =
     ui.steps.isNotEmpty() && ui.steps.none { it.invalid(ui.apps) }
 
 @Composable
-private fun StepRow(
+internal fun StepRow(
     step: DraftStep,
     apps: List<AppOption>,
     readOnly: Boolean,
@@ -362,6 +354,11 @@ private fun StepRow(
     onMove: (Int) -> Unit,
     onRemove: () -> Unit,
     onEdit: () -> Unit,
+    onDuplicate: (() -> Unit)? = null,
+    onInsert: (() -> Unit)? = null,
+    onChangeType: (() -> Unit)? = null,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
@@ -400,6 +397,11 @@ private fun StepRow(
             )
             IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreHoriz, contentDescription = "步骤选项") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                onMoveUp?.let { action -> DropdownMenuItem(text = { Text("上移") }, onClick = { menu = false; action() }) }
+                onMoveDown?.let { action -> DropdownMenuItem(text = { Text("下移") }, onClick = { menu = false; action() }) }
+                onDuplicate?.let { action -> DropdownMenuItem(text = { Text("复制") }, onClick = { menu = false; action() }) }
+                onInsert?.let { action -> DropdownMenuItem(text = { Text("在下方插入") }, onClick = { menu = false; action() }) }
+                onChangeType?.let { action -> DropdownMenuItem(text = { Text("更换类型") }, onClick = { menu = false; action() }) }
                 DropdownMenuItem(text = { Text("删除") }, onClick = { menu = false; onRemove() })
             }
         }
@@ -407,7 +409,7 @@ private fun StepRow(
 }
 
 @Composable
-private fun WaitDialog(step: DraftWait, onConfirm: (Long?) -> Unit, onDismiss: () -> Unit) {
+internal fun WaitDialog(step: DraftWait, onConfirm: (Long?) -> Unit, onDismiss: () -> Unit) {
     var seconds by remember(step.key) { mutableStateOf(step.waitMs?.let(::formatWaitSeconds).orEmpty()) }
     val waitMs = parseWaitSeconds(seconds)
     AlertDialog(
@@ -429,6 +431,23 @@ private fun WaitDialog(step: DraftWait, onConfirm: (Long?) -> Unit, onDismiss: (
                 enabled = waitMs != null && waitMs in WAIT_MIN_MS..WAIT_MAX_MS,
             ) { Text("确定") }
         },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+internal fun AppPickerDialog(apps: List<AppOption>, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择应用") },
+        text = {
+            Column(Modifier.height(320.dp).verticalScroll(rememberScrollState())) {
+                apps.forEach { app ->
+                    TextButton(onClick = { onPick(app.packageName) }) { Text(app.label) }
+                }
+            }
+        },
+        confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
