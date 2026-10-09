@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -137,7 +139,6 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
     var showAdd by remember { mutableStateOf(false) }
     var pickingApp by remember { mutableStateOf<Long?>(null) }
     var editingWait by remember { mutableStateOf<DraftWait?>(null) }
-    var showScheduleOptions by remember { mutableStateOf(false) }
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
     var showTemplates by remember { mutableStateOf(false) }
@@ -172,12 +173,31 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             ui.notice?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             ui.limitHint?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             ui.trialBanner?.let { Text("试运行：$it") }
-            Text(
-                ui.scheduledAt?.let { "计划时间 ${formatWhen(it)}" } ?: "计划时间：仅手动",
-                modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.readOnly) { showScheduleOptions = true }
-                    .padding(vertical = 12.dp),
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("计划时间", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    ui.scheduledAt?.let(::formatScheduleDate) ?: "??月??日",
+                    modifier = Modifier.clickable(enabled = !ui.readOnly) { showDate = true }
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                )
+                Text(
+                    ui.scheduledAt?.let(::formatScheduleTime) ?: "??:??",
+                    modifier = Modifier.clickable(enabled = !ui.readOnly) { showTime = true }
+                        .padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.weight(1f))
+                if (!ui.readOnly) IconButton(
+                    onClick = { actions.setScheduledAt(null) },
+                    enabled = ui.scheduledAt != null,
+                ) { Icon(Icons.Default.DeleteOutline, contentDescription = "删除计划时间") }
+            }
             Row(
                 Modifier.fillMaxWidth().height(48.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -227,21 +247,6 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             },
             confirmButton = {},
             dismissButton = { TextButton(onClick = { showAdd = false }) { Text("取消") } },
-        )
-    }
-    if (showScheduleOptions) {
-        AlertDialog(
-            onDismissRequest = { showScheduleOptions = false },
-            title = { Text("计划时间") },
-            text = {
-                Column {
-                    TextButton(onClick = { showScheduleOptions = false; showDate = true }) { Text("选择日期") }
-                    TextButton(onClick = { showScheduleOptions = false; showTime = true }) { Text("选择时间") }
-                    TextButton(onClick = { actions.setScheduledAt(null); showScheduleOptions = false }) { Text("清除时间") }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { showScheduleOptions = false }) { Text("取消") } },
         )
     }
     if (showTemplates) {
