@@ -214,14 +214,14 @@ private fun TaskRow(
             val canRun = task.executable &&
                 (task.status == TaskStatus.DRAFT || task.status == TaskStatus.SCHEDULED) && !busy
             if (task.status != TaskStatus.RUNNING) {
-                Column(Modifier.width(104.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.width(104.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (canRun) OutlinedButton(
                         onClick = onRun,
                         modifier = Modifier.fillMaxWidth().height(32.dp),
                         shape = RoundedCornerShape(6.dp),
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                     ) {
-                        Text("立即执行")
+                        Text("立即执行", style = MaterialTheme.typography.bodySmall)
                     }
                     if (task.status == TaskStatus.SCHEDULED) {
                         OutlinedButton(
@@ -230,7 +230,7 @@ private fun TaskRow(
                             shape = RoundedCornerShape(6.dp),
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                         ) {
-                            Text("取消计划")
+                            Text("取消计划", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     OutlinedButton(
