@@ -14,6 +14,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import com.local.clicker.domain.OPEN_APP_TIMEOUT_MS
 import com.local.clicker.domain.OpenAppStep
@@ -208,21 +209,34 @@ class ClickerAccessibilityService : AccessibilityService() {
     private fun showBubble() {
         removePickView()
         val density = resources.displayMetrics.density
-        val button = TextView(this).apply {
+        val buttonSize = (48 * density).toInt()
+        val pick = TextView(this).apply {
             text = "取点"
             gravity = Gravity.CENTER
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0xFF1F6FEB.toInt())
-            minWidth = (48 * density).toInt()
-            minHeight = (48 * density).toInt()
             setOnClickListener { showCatcher() }
+        }
+        val cancel = TextView(this).apply {
+            text = "取消"
+            gravity = Gravity.CENTER
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0xCC333333.toInt())
+            setOnClickListener { cancelPick() }
+        }
+        val bubble = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(pick, LinearLayout.LayoutParams(buttonSize, buttonSize))
+            addView(cancel, LinearLayout.LayoutParams(buttonSize, buttonSize).apply {
+                marginStart = (4 * density).toInt()
+            })
         }
         val params = overlayParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
         ).apply { gravity = Gravity.END or Gravity.CENTER_VERTICAL }
-        windowManager.addView(button, params)
-        pickView = button
+        windowManager.addView(bubble, params)
+        pickView = bubble
     }
 
     private fun showCatcher() {
