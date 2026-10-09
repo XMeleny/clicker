@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -360,7 +361,7 @@ private fun StepRow(
     var accum by remember { mutableFloatStateOf(0f) }
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
     Row(
-        Modifier.fillMaxWidth().height(52.dp).pointerInput(step.key, readOnly) {
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).pointerInput(step.key, readOnly) {
             if (readOnly) return@pointerInput
             detectDragGesturesAfterLongPress(
                 onDragStart = { dragging = true },
@@ -378,8 +379,7 @@ private fun StepRow(
     ) {
         Text(
             step.summary(apps),
-            modifier = Modifier.weight(1f).clickable(enabled = !readOnly, onClick = onEdit)
-                .padding(vertical = 14.dp),
+            modifier = Modifier.weight(1f).clickable(enabled = !readOnly, onClick = onEdit),
             color = if (invalid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
