@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.os.SystemClock
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -21,6 +22,7 @@ import com.local.clicker.domain.Step
 import com.local.clicker.domain.TAP_HOLD_MS
 import com.local.clicker.domain.TapPoint
 import com.local.clicker.domain.TapStep
+import com.local.clicker.domain.WAKE_START_TIMEOUT_MS
 import com.local.clicker.domain.WAKE_TIMEOUT_MS
 import com.local.clicker.domain.WaitStep
 import kotlinx.coroutines.delay
@@ -85,20 +87,45 @@ class ClickerAccessibilityService : AccessibilityService() {
     }
 
     suspend fun wakeAndUnlock(): Boolean {
-        val intent = Intent(this, WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(intent)
-        val deadline = SystemClock.elapsedRealtime() + WAKE_TIMEOUT_MS
-        while (SystemClock.elapsedRealtime() < deadline) {
-            if (screenReady()) {
-                WakeActivity.finishIfAlive()
-                val gone = SystemClock.elapsedRealtime() + 800
-                while (WakeActivity.isAlive() && SystemClock.elapsedRealtime() < gone) delay(20)
-                return screenReady()
+        val requestId = WakeActivity.beginRequest()
+        try {
+            val intent = Intent(this, WakeActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(WakeActivity.EXTRA_REQUEST_ID, requestId)
+            startActivity(intent)
+
+            val startDeadline = SystemClock.elapsedRealtime() + WAKE_START_TIMEOUT_MS
+            while (WakeActivity.startedAt(requestId) == null && SystemClock.elapsedRealtime() < startDeadline) delay(40)
+            val startedAt = WakeActivity.startedAt(requestId)
+            if (startedAt == null || startedAt > startDeadline) {
+                Log.w("Clicker", "wake activity start timeout")
+                return false
             }
-            delay(40)
+
+            val readyDeadline = startedAt + WAKE_TIMEOUT_MS
+            while (SystemClock.elapsedRealtime() < readyDeadline) {
+                if (!screenReady()) {
+                    delay(40)
+                    continue
+                }
+                WakeActivity.finishRequest(requestId)
+                val gone = SystemClock.elapsedRealtime() + 800
+                while (WakeActivity.isAlive(requestId) && SystemClock.elapsedRealtime() < gone) delay(20)
+                if (WakeActivity.isAlive(requestId)) {
+                    Log.w("Clicker", "wake activity finish timeout")
+                    return false
+                }
+                val ready = screenReady()
+                if (!ready) Log.w("Clicker", "screen not ready after wake activity finished")
+                return ready
+            }
+            val power = getSystemService(android.os.PowerManager::class.java)
+            val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+            Log.w("Clicker", "wake ready timeout interactive=${power.isInteractive} keyguardLocked=${keyguard.isKeyguardLocked}")
+            return false
+        } finally {
+            WakeActivity.finishRequest(requestId)
         }
-        WakeActivity.finishIfAlive()
-        return false
     }
 
     fun screenReady(): Boolean {

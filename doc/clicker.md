@@ -287,7 +287,7 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 | 2 | 快照步骤数在 `[1, 30]`，且每一步都是已完成的密封类型 | 任务步骤不合法 |
 | 3 | 每一个 `OPEN_APP` 的包仍有启动 Activity | 应用不存在：{packageName} |
 | 4 | `KeyguardManager.isKeyguardSecure == false` | 设备设有锁屏密码 |
-| 5 | 3 秒内屏幕已点亮，且 `isKeyguardLocked == false` | 无法点亮或解除锁屏 |
+| 5 | 页面在 6 秒内创建，此后 3 秒内屏幕已点亮，且 `isKeyguardLocked == false` | 无法点亮或解除锁屏 |
 | 6 | 默认显示器的宽、高、rotation 与快照里每一个 `TAP` 步骤记录的一致 | 屏幕分辨率或方向已变化 |
 
 第 4 步用 `isKeyguardSecure`，它只在 PIN、图案、密码时为真。安全设置为「无」或「滑动」时为假。为真则直接失败，不收集密码，不在锁屏上点击。
@@ -301,7 +301,7 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 1. 加上一块 1×1、完全透明、不可点击、不可聚焦的 `TYPE_ACCESSIBILITY_OVERLAY`，带 `FLAG_KEEP_SCREEN_ON`。这块浮层从点亮开始一直留到本次执行结束，避免等待步骤超过系统熄屏时间后屏幕又灭掉。它不接收触摸，点击仍然落在目标应用上。
 2. 启动 `WakeActivity`（透明、不进最近任务、`exported=false`）。`onCreate` 里调用 `setTurnScreenOn(true)` 和 `setShowWhenLocked(true)`。
 3. `isKeyguardLocked == true` 且 `isKeyguardSecure == false` 时，调用 `KeyguardManager.requestDismissKeyguard`。滑动锁屏会在这里被系统划掉。已经是「无」锁屏时，点亮后锁屏本身不存在，这一步跳过。
-4. 等到 `PowerManager.isInteractive == true` 且 `isKeyguardLocked == false`，最多 3 秒。
+4. 最多等待 6 秒让 `WakeActivity` 真正创建；从创建后起，最多再等 3 秒，直到 `PowerManager.isInteractive == true` 且 `isKeyguardLocked == false`。超时后才创建的页面立即自行关闭。
 5. `finish()` 掉 `WakeActivity`，并确认它已不在前台，然后再跑第一步。点亮用的界面不能盖住目标应用。
 
 不用手势去猜锁屏滑条的位置。解除锁屏只走 `requestDismissKeyguard`。
@@ -453,7 +453,7 @@ data class DraftTap(..., val tap: TapPoint?) : DraftStep
 | 重启后计划时间已过 | `MISSED` |
 | 到点时屏幕是灭的，且没有 PIN / 图案 / 密码 | 先点亮屏幕。若是滑动锁屏则由系统划掉，然后再执行步骤 |
 | 到点时已设置 PIN / 图案 / 密码 | `FAILED`，原因「设备设有锁屏密码」。不点击，不尝试解锁 |
-| 点亮或划掉滑动锁屏超过 3 秒仍未就绪 | `FAILED`，原因「无法点亮或解除锁屏」。不点击 |
+| 唤屏页面超过 6 秒才创建，或创建后 3 秒内仍未点亮并划掉滑动锁屏 | `FAILED`，原因「无法点亮或解除锁屏」。不点击 |
 | 执行过程中屏幕再次熄灭或锁屏出现 | 当前步失败，后续步骤不跑 |
 | 取点后旋转了屏幕，或分辨率不同 | `FAILED`，不点击 |
 | 目标应用被卸载 | 开始前失败 |
