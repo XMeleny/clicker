@@ -1,6 +1,7 @@
 package com.local.clicker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -25,6 +27,9 @@ data class TitleBarAction(val label: String, val onClick: () -> Unit)
 fun AppTitleBar(
     title: String,
     action: TitleBarAction? = null,
+    onTitleChange: ((String) -> Unit)? = null,
+    titlePlaceholder: String = "",
+    titleEnabled: Boolean = true,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).statusBarsPadding(),
@@ -36,13 +41,39 @@ fun AppTitleBar(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = title,
-                    modifier = Modifier.weight(1f).padding(start = 8.dp),
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (onTitleChange == null) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f).padding(start = 8.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    BasicTextField(
+                        value = title,
+                        onValueChange = onTitleChange,
+                        enabled = titleEnabled,
+                        singleLine = true,
+                        modifier = Modifier.weight(1f).padding(start = 8.dp),
+                        textStyle = MaterialTheme.typography.titleLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        decorationBox = { innerTextField ->
+                            Box {
+                                if (title.isEmpty()) {
+                                    Text(
+                                        titlePlaceholder,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.titleLarge,
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                    )
+                }
                 action?.let {
                     TextButton(onClick = it.onClick) { Text(it.label, maxLines = 1) }
                 }

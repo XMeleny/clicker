@@ -28,12 +28,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -47,7 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalContext
@@ -55,7 +51,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
@@ -73,6 +68,8 @@ import com.local.clicker.domain.WAIT_MIN_MS
 import com.local.clicker.domain.formatWaitSeconds
 import com.local.clicker.domain.parseWaitSeconds
 import com.local.clicker.exec.ClickerRuntimeService
+import com.local.clicker.ui.AppTitleBar
+import com.local.clicker.ui.TitleBarAction
 import com.local.clicker.ui.theme.ClickerTheme
 import java.time.Instant
 import java.time.ZoneId
@@ -143,29 +140,13 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
     var showTime by remember { mutableStateOf(false) }
     var showTemplates by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .heightIn(min = 64.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextField(
-                value = ui.name,
-                onValueChange = actions.setName,
-                placeholder = { Text("任务名") },
-                enabled = !ui.readOnly,
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-                textStyle = MaterialTheme.typography.titleLarge,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                ),
-            )
-            if (!ui.readOnly) TextButton(onClick = actions.save) { Text("保存") }
-        }
-        HorizontalDivider()
+        AppTitleBar(
+            title = ui.name,
+            action = if (ui.readOnly) null else TitleBarAction("保存", actions.save),
+            onTitleChange = actions.setName,
+            titlePlaceholder = "任务名",
+            titleEnabled = !ui.readOnly,
+        )
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
