@@ -1,5 +1,6 @@
 package com.local.clicker.ui.permission
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,9 +8,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -25,6 +29,7 @@ fun PermissionScreen(
     gate: PermissionGate,
     onAccessibility: () -> Unit,
     onAlarms: () -> Unit,
+    onBatterySettings: () -> Unit,
     onSms: () -> Unit,
 ) {
     Column(
@@ -39,6 +44,12 @@ fun PermissionScreen(
             HorizontalDivider()
             PermissionRow("闹钟和提醒", "用于在设定时间准时启动任务。", gate.alarms, onAlarms)
             HorizontalDivider()
+            SettingsRow(
+                title = "省电策略",
+                description = "在应用信息中进入电量消耗或省电策略，选择“无限制”。",
+                onClick = onBatterySettings,
+            )
+            HorizontalDivider()
             PermissionRow(
                 title = "短信建任务",
                 description = "仅接收尾号 4211 的号码发送的指令。格式：CLICKER 模板编号 YYYY-MM-DD HH:mm\n例如：CLICKER 12 2026-10-01 08:00",
@@ -46,6 +57,25 @@ fun PermissionScreen(
                 onClick = onSms,
             )
         }
+    }
+}
+
+@Composable
+private fun SettingsRow(title: String, description: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(Icons.Default.ChevronRight, contentDescription = null)
     }
 }
 

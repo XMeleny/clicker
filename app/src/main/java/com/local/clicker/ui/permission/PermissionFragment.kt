@@ -39,6 +39,11 @@ class PermissionFragment : Fragment() {
                                 data = Uri.parse("package:${requireContext().packageName}")
                             })
                         },
+                        onBatterySettings = {
+                            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:${requireContext().packageName}")
+                            })
+                        },
                         onSms = {
                             if (gate.sms) {
                                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
