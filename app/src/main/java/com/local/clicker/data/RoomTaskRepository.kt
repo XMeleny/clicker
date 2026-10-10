@@ -23,13 +23,16 @@ import com.local.clicker.domain.WAIT_MAX_MS
 import com.local.clicker.domain.WAIT_MIN_MS
 import com.local.clicker.domain.WaitStep
 import com.local.clicker.domain.formatWaitSeconds
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
-class RoomTaskRepository(
+class RoomTaskRepository internal constructor(
     private val dao: ClickerDao,
     private val packageManager: PackageManager,
+    private val failureLog: FailureLog,
 ) : TaskRepository {
 
     override fun observeLogs(): Flow<List<ExecutionLog>> =
@@ -189,23 +192,33 @@ class RoomTaskRepository(
                 trial = false,
             ),
         )
+        if (status == TaskStatus.FAILED || status == TaskStatus.MISSED) {
+            withContext(Dispatchers.IO) { failureLog.record(id, status.name, message, false, now) }
+        }
     }
 
     override suspend fun recordTrial(id: Long, status: TaskStatus, message: String) {
         val task = dao.getTask(id) ?: return
+        val now = System.currentTimeMillis()
         dao.insertLog(
             ExecutionLogEntity(
                 taskId = id,
                 taskName = task.name,
                 status = status.name,
                 message = message,
-                createdAt = System.currentTimeMillis(),
+                createdAt = now,
                 trial = true,
             ),
         )
+        if (status == TaskStatus.FAILED) {
+            withContext(Dispatchers.IO) { failureLog.record(id, status.name, message, true, now) }
+        }
     }
 
-    override suspend fun clearLogs() = dao.clearLogs()
+    override suspend fun clearLogs() {
+        dao.clearLogs()
+        withContext(Dispatchers.IO) { failureLog.clear() }
+    }
 
     override suspend fun markMissed(id: Long) {
         markTerminal(id, TaskStatus.MISSED, "已超过计划时间 30 秒，未执行", null)
@@ -229,6 +242,9 @@ class RoomTaskRepository(
                     trial = false,
                 ),
             )
+            withContext(Dispatchers.IO) {
+                failureLog.record(task.id, TaskStatus.FAILED.name, "执行被中断", false, now)
+            }
         }
     }
 

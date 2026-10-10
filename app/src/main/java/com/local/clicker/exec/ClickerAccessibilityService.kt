@@ -87,20 +87,25 @@ class ClickerAccessibilityService : AccessibilityService() {
         keepAwake = null
     }
 
-    suspend fun wakeAndUnlock(): Boolean {
+    suspend fun wakeAndUnlock(): String? {
         val requestId = WakeActivity.beginRequest()
         try {
             val intent = Intent(this, WakeActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(WakeActivity.EXTRA_REQUEST_ID, requestId)
-            startActivity(intent)
+            try {
+                startActivity(intent)
+            } catch (error: RuntimeException) {
+                Log.w("Clicker", "wake activity launch failed", error)
+                return "唤醒界面启动失败：${error.javaClass.simpleName}"
+            }
 
             val startDeadline = SystemClock.elapsedRealtime() + WAKE_START_TIMEOUT_MS
             while (WakeActivity.startedAt(requestId) == null && SystemClock.elapsedRealtime() < startDeadline) delay(40)
             val startedAt = WakeActivity.startedAt(requestId)
             if (startedAt == null || startedAt > startDeadline) {
                 Log.w("Clicker", "wake activity start timeout")
-                return false
+                return "唤醒界面启动超时（${screenState()}）"
             }
 
             val readyDeadline = startedAt + WAKE_TIMEOUT_MS
@@ -114,16 +119,17 @@ class ClickerAccessibilityService : AccessibilityService() {
                 while (WakeActivity.isAlive(requestId) && SystemClock.elapsedRealtime() < gone) delay(20)
                 if (WakeActivity.isAlive(requestId)) {
                     Log.w("Clicker", "wake activity finish timeout")
-                    return false
+                    return "唤醒界面退出超时（${screenState()}）"
                 }
-                val ready = screenReady()
-                if (!ready) Log.w("Clicker", "screen not ready after wake activity finished")
-                return ready
+                if (!screenReady()) {
+                    Log.w("Clicker", "screen not ready after wake activity finished")
+                    return "唤醒界面退出后屏幕未就绪（${screenState()}）"
+                }
+                return null
             }
-            val power = getSystemService(android.os.PowerManager::class.java)
-            val keyguard = getSystemService(android.app.KeyguardManager::class.java)
-            Log.w("Clicker", "wake ready timeout interactive=${power.isInteractive} keyguardLocked=${keyguard.isKeyguardLocked}")
-            return false
+            val state = screenState()
+            Log.w("Clicker", "wake ready timeout $state")
+            return "屏幕或解锁等待超时（$state）"
         } finally {
             WakeActivity.finishRequest(requestId)
         }
@@ -133,6 +139,12 @@ class ClickerAccessibilityService : AccessibilityService() {
         val power = getSystemService(android.os.PowerManager::class.java)
         val keyguard = getSystemService(android.app.KeyguardManager::class.java)
         return power.isInteractive && !keyguard.isKeyguardLocked
+    }
+
+    private fun screenState(): String {
+        val power = getSystemService(android.os.PowerManager::class.java)
+        val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+        return "interactive=${power.isInteractive}, keyguardLocked=${keyguard.isKeyguardLocked}"
     }
 
     suspend fun runStep(step: Step, cancelled: () -> Boolean, startedAt: Long): String? {

@@ -30,10 +30,10 @@ class ExecutionEngine(private val context: Context) {
         val keyguard = context.getSystemService(KeyguardManager::class.java)
         if (keyguard.isKeyguardSecure) return Outcome.Failed("设备设有锁屏密码")
         service.showKeepAwake()
-        val awake = service.wakeAndUnlock()
-        if (!awake) {
+        val wakeFailure = service.wakeAndUnlock()
+        if (wakeFailure != null) {
             service.hideKeepAwake()
-            return Outcome.Failed("无法点亮或解除锁屏")
+            return Outcome.Failed("无法点亮或解除锁屏：$wakeFailure")
         }
         val live = context.liveScreen()
         val mismatch = snapshot.steps.filterIsInstance<TapStep>().any {
