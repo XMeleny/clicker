@@ -35,6 +35,11 @@ class RoomTaskRepository internal constructor(
     private val failureLog: FailureLog,
 ) : TaskRepository {
 
+    fun beginDiagnostic(id: Long, source: String, trial: Boolean, scheduledAt: Long?) =
+        failureLog.begin(id, source, trial, scheduledAt)
+
+    fun diagnosticEvent(id: Long, message: String) = failureLog.event(id, message)
+
     override fun observeLogs(): Flow<List<ExecutionLog>> =
         dao.observeLogs().map { rows -> rows.map { it.toLog() } }
 
@@ -192,9 +197,7 @@ class RoomTaskRepository internal constructor(
                 trial = false,
             ),
         )
-        if (status == TaskStatus.FAILED || status == TaskStatus.MISSED) {
-            withContext(Dispatchers.IO) { failureLog.record(id, status.name, message, false, now) }
-        }
+        withContext(Dispatchers.IO) { failureLog.finish(id, status.name, message, false, now) }
     }
 
     override suspend fun recordTrial(id: Long, status: TaskStatus, message: String) {
@@ -210,9 +213,7 @@ class RoomTaskRepository internal constructor(
                 trial = true,
             ),
         )
-        if (status == TaskStatus.FAILED) {
-            withContext(Dispatchers.IO) { failureLog.record(id, status.name, message, true, now) }
-        }
+        withContext(Dispatchers.IO) { failureLog.finish(id, status.name, message, true, now) }
     }
 
     override suspend fun clearLogs() {
@@ -243,7 +244,7 @@ class RoomTaskRepository internal constructor(
                 ),
             )
             withContext(Dispatchers.IO) {
-                failureLog.record(task.id, TaskStatus.FAILED.name, "执行被中断", false, now)
+                failureLog.interrupted(task.id, now)
             }
         }
     }

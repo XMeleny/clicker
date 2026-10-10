@@ -87,15 +87,18 @@ class ClickerAccessibilityService : AccessibilityService() {
         keepAwake = null
     }
 
-    suspend fun wakeAndUnlock(): String? {
-        val requestId = WakeActivity.beginRequest()
+    suspend fun wakeAndUnlock(onDiagnostic: (String) -> Unit): String? {
+        val requestId = WakeActivity.beginRequest(onDiagnostic)
+        onDiagnostic("wake requested ${screenState()}")
         try {
             val intent = Intent(this, WakeActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(WakeActivity.EXTRA_REQUEST_ID, requestId)
             try {
                 startActivity(intent)
+                onDiagnostic("wake activity launch requested")
             } catch (error: RuntimeException) {
+                onDiagnostic("wake activity launch failed ${error.javaClass.simpleName} ${screenState()}")
                 Log.w("Clicker", "wake activity launch failed", error)
                 return "唤醒界面启动失败：${error.javaClass.simpleName}"
             }
@@ -104,9 +107,11 @@ class ClickerAccessibilityService : AccessibilityService() {
             while (WakeActivity.startedAt(requestId) == null && SystemClock.elapsedRealtime() < startDeadline) delay(40)
             val startedAt = WakeActivity.startedAt(requestId)
             if (startedAt == null || startedAt > startDeadline) {
+                onDiagnostic("wake activity start timeout ${screenState()}")
                 Log.w("Clicker", "wake activity start timeout")
                 return "唤醒界面启动超时（${screenState()}）"
             }
+            onDiagnostic("wake activity started ${screenState()}")
 
             val readyDeadline = startedAt + WAKE_TIMEOUT_MS
             while (SystemClock.elapsedRealtime() < readyDeadline) {
@@ -118,16 +123,20 @@ class ClickerAccessibilityService : AccessibilityService() {
                 val gone = SystemClock.elapsedRealtime() + 800
                 while (WakeActivity.isAlive(requestId) && SystemClock.elapsedRealtime() < gone) delay(20)
                 if (WakeActivity.isAlive(requestId)) {
+                    onDiagnostic("wake activity finish timeout ${screenState()}")
                     Log.w("Clicker", "wake activity finish timeout")
                     return "唤醒界面退出超时（${screenState()}）"
                 }
                 if (!screenReady()) {
+                    onDiagnostic("screen not ready after wake ${screenState()}")
                     Log.w("Clicker", "screen not ready after wake activity finished")
                     return "唤醒界面退出后屏幕未就绪（${screenState()}）"
                 }
+                onDiagnostic("wake complete ${screenState()}")
                 return null
             }
             val state = screenState()
+            onDiagnostic("wake ready timeout $state")
             Log.w("Clicker", "wake ready timeout $state")
             return "屏幕或解锁等待超时（$state）"
         } finally {
@@ -141,7 +150,7 @@ class ClickerAccessibilityService : AccessibilityService() {
         return power.isInteractive && !keyguard.isKeyguardLocked
     }
 
-    private fun screenState(): String {
+    fun screenState(): String {
         val power = getSystemService(android.os.PowerManager::class.java)
         val keyguard = getSystemService(android.app.KeyguardManager::class.java)
         return "interactive=${power.isInteractive}, keyguardLocked=${keyguard.isKeyguardLocked}"

@@ -93,6 +93,7 @@ class ClickerRuntimeService : Service() {
         val now = System.currentTimeMillis()
         val task = repo.get(request.taskId) ?: return
         val trial = request.trialStepKey != null
+        if (!trial && task.status != TaskStatus.DRAFT && task.status != TaskStatus.SCHEDULED) return
         if (request.source == SOURCE_ALARM) {
             if (task.status != TaskStatus.SCHEDULED || task.scheduledAt != request.scheduledAt) {
                 Log.i(ExecutionEngine.TAG, "drop alarm task=${request.taskId}")
@@ -105,13 +106,24 @@ class ClickerRuntimeService : Service() {
                 return
             }
         }
+        repo.beginDiagnostic(
+            request.taskId,
+            when (request.source) {
+                SOURCE_ALARM -> "alarm"
+                SOURCE_TRIAL -> "trial"
+                else -> "manual"
+            },
+            trial,
+            request.scheduledAt,
+        )
+        repo.diagnosticEvent(request.taskId, "task status=${task.status} name=${task.name}")
         val snapshot = if (trial) {
             repo.stepSnapshot(request.taskId, request.trialStepKey!!)
         } else {
-            if (task.status != TaskStatus.DRAFT && task.status != TaskStatus.SCHEDULED) return
             repo.executionSnapshot(request.taskId)
         }
         if (snapshot == null) {
+            repo.diagnosticEvent(request.taskId, "snapshot invalid")
             if (trial) {
                 repo.recordTrial(request.taskId, TaskStatus.FAILED, "任务步骤不合法")
                 trialResults.emit(TrialResult(request.taskId, "任务步骤不合法"))
@@ -124,13 +136,16 @@ class ClickerRuntimeService : Service() {
             app.graph.alarms.cancel(task.id)
         }
         val engine = ExecutionEngine(this)
-        val blocked = engine.prepare(snapshot)
+        repo.diagnosticEvent(request.taskId, "prepare steps=${snapshot.steps.size}")
+        val blocked = engine.prepare(snapshot) { repo.diagnosticEvent(request.taskId, it) }
         if (blocked != null) {
             publish(request, snapshot.name, blocked, trial, now)
             return
         }
         if (!trial) repo.markRunning(request.taskId, now)
-        val outcome = engine.runSteps(snapshot, cancelled = { cancel.get() }) { index, total, label ->
+        repo.diagnosticEvent(request.taskId, "running")
+        val outcome = engine.runSteps(snapshot, cancelled = { cancel.get() },
+            onDiagnostic = { repo.diagnosticEvent(request.taskId, it) }) { index, total, label ->
             val notification = Notifier.running(
                 this,
                 if (trial) "正在试运行「${snapshot.name}」" else "正在执行「${snapshot.name}」",
