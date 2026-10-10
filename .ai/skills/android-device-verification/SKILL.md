@@ -1,10 +1,13 @@
 ---
 name: android-device-verification
-description: Verify Android app changes in this project on a connected physical device, especially UI changes that need screenshots or installation.
+description: Choose the build and device verification path for completed Android changes in this project based on whether the designated physical device is connected.
 ---
 
 # Android Device Verification
 
-Use the connected physical Android device for installation, interaction, and screenshots. Check `adb devices -l` and target its serial explicitly when more than one device is listed.
+For completed app code changes, check `adb devices -l` for device `SG4DGUTK5L4T6DMV` in the `device` state.
 
-Do not start an Android emulator for this project unless the user explicitly asks for one. Emulators consume too much CPU on this machine. If the physical device is offline, try reconnecting it; if it remains unavailable, complete build and other available checks, then report what could not be verified on-device.
+- When it is connected, run `:app:runDebugWithoutForceStop` from the Gradle wrapper. This task compiles, installs, and launches the debug app without an explicit force-stop. Set `ANDROID_SERIAL=SG4DGUTK5L4T6DMV` for the command so installation and launch target this device. Then perform relevant UI checks on the physical device.
+- When it is absent or offline, commit the completed change without running Gradle compilation, build, install, or launch tasks. Report that device verification was skipped.
+
+Do not start an Android emulator unless the user explicitly requests one. A task-specific user instruction to skip or run a check takes precedence over this default workflow.
