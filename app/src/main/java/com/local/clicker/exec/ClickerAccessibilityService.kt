@@ -17,6 +17,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.local.clicker.domain.OPEN_APP_TIMEOUT_MS
+import com.local.clicker.domain.LockScreenStep
 import com.local.clicker.domain.OpenAppStep
 import com.local.clicker.domain.RUN_WALL_MS
 import com.local.clicker.domain.Step
@@ -162,7 +163,19 @@ class ClickerAccessibilityService : AccessibilityService() {
             is OpenAppStep -> openApp(step.packageName, cancelled)
             is WaitStep -> waitFor(step.waitMs, cancelled, startedAt)
             is TapStep -> tap(step.x, step.y)
+            is LockScreenStep -> lockScreen(cancelled)
         }
+    }
+
+    private suspend fun lockScreen(cancelled: () -> Boolean): String? {
+        hideKeepAwake()
+        if (!performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)) return "系统拒绝锁屏"
+        val deadline = SystemClock.elapsedRealtime() + 5_000L
+        while (screenReady() && SystemClock.elapsedRealtime() < deadline) {
+            if (cancelled()) return CANCELLED
+            delay(50)
+        }
+        return if (screenReady()) "锁屏后屏幕仍处于解锁状态" else null
     }
 
     fun beginPick(stepKey: Long) {

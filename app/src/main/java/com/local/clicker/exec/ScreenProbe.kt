@@ -5,6 +5,7 @@ import android.hardware.display.DisplayManager
 import android.view.Display
 import android.view.WindowManager
 import com.local.clicker.domain.OpenAppStep
+import com.local.clicker.domain.LockScreenStep
 import com.local.clicker.domain.Step
 import com.local.clicker.domain.TapStep
 import com.local.clicker.domain.WaitStep
@@ -31,4 +32,5 @@ fun Step.shortLabel(context: Context): String = when (this) {
     }
     is WaitStep -> "等待 ${formatWaitSeconds(waitMs)} 秒"
     is TapStep -> "点击 ($x,$y)"
+    is LockScreenStep -> "锁屏"
 }

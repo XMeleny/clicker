@@ -65,6 +65,7 @@ object ScriptEditor {
         StepKind.OPEN_APP -> DraftOpenApp(key, 0, null)
         StepKind.WAIT -> DraftWait(key, 0, null)
         StepKind.TAP -> DraftTap(key, 0, null)
+        StepKind.LOCK_SCREEN -> DraftLockScreen(key, 0)
     }
 
     private fun reindex(steps: List<DraftStep>): List<DraftStep> =

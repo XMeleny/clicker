@@ -62,6 +62,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.local.clicker.domain.DraftOpenApp
+import com.local.clicker.domain.DraftLockScreen
 import com.local.clicker.domain.DraftStep
 import com.local.clicker.domain.DraftTap
 import com.local.clicker.domain.DraftWait
@@ -201,6 +202,7 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
                             is DraftOpenApp -> pickingApp = step.key
                             is DraftWait -> editingWait = step
                             is DraftTap -> actions.requestPick(step.key)
+                            is DraftLockScreen -> Unit
                         }
                     },
                 ),
@@ -442,6 +444,7 @@ internal fun StepKind.label(): String = when (this) {
     StepKind.OPEN_APP -> "打开应用"
     StepKind.WAIT -> "等待"
     StepKind.TAP -> "点击"
+    StepKind.LOCK_SCREEN -> "锁屏"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

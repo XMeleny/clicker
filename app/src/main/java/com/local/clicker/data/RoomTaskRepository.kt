@@ -2,6 +2,7 @@ package com.local.clicker.data
 
 import android.content.pm.PackageManager
 import com.local.clicker.domain.DraftOpenApp
+import com.local.clicker.domain.DraftLockScreen
 import com.local.clicker.domain.DraftStep
 import com.local.clicker.domain.DraftTap
 import com.local.clicker.domain.DraftWait
@@ -9,6 +10,7 @@ import com.local.clicker.domain.ExecutionSnapshot
 import com.local.clicker.domain.ExecutionLog
 import com.local.clicker.domain.NAME_MAX
 import com.local.clicker.domain.OpenAppStep
+import com.local.clicker.domain.LockScreenStep
 import com.local.clicker.domain.SaveResult
 import com.local.clicker.domain.Step
 import com.local.clicker.domain.StepKind
@@ -276,6 +278,7 @@ internal fun StepEntity.summary(packageManager: PackageManager): String = when (
     } ?: "打开应用（未选择）"
     StepKind.WAIT -> waitMs?.let { "等待 ${formatWaitSeconds(it)} 秒" } ?: "等待（未填写）"
     StepKind.TAP -> if (x != null && y != null) "点击 ($x, $y)" else "点击（未取点）"
+    StepKind.LOCK_SCREEN -> "锁屏"
 }
 
 private fun ExecutionLogEntity.toLog() = ExecutionLog(
@@ -290,6 +293,7 @@ private fun ExecutionLogEntity.toLog() = ExecutionLog(
 
 internal fun StepEntity.toDraft(): DraftStep = when (StepKind.valueOf(type)) {
     StepKind.OPEN_APP -> DraftOpenApp(id, orderIndex, packageName)
+    StepKind.LOCK_SCREEN -> DraftLockScreen(id, orderIndex)
     StepKind.WAIT -> DraftWait(id, orderIndex, waitMs)
     StepKind.TAP -> DraftTap(
         id,
@@ -309,6 +313,8 @@ private fun StepEntity.toStep(): Step? {
             OpenAppStep(id, orderIndex, it)
         }
 
+        StepKind.LOCK_SCREEN -> LockScreenStep(id, orderIndex)
+
         StepKind.WAIT -> waitMs?.takeIf { it in WAIT_MIN_MS..WAIT_MAX_MS }?.let {
             WaitStep(id, orderIndex, it)
         }
@@ -327,6 +333,20 @@ private fun StepEntity.toStep(): Step? {
 internal fun DraftStep.toEntity(taskId: Long): StepEntity {
     val persistedId = if (key > 0) key else 0
     return when (this) {
+        is DraftLockScreen -> StepEntity(
+            id = persistedId,
+            taskId = taskId,
+            orderIndex = orderIndex,
+            type = kind.name,
+            complete = true,
+            packageName = null,
+            waitMs = null,
+            x = null,
+            y = null,
+            screenWidth = null,
+            screenHeight = null,
+            rotation = null,
+        )
         is DraftOpenApp -> StepEntity(
             id = persistedId,
             taskId = taskId,
@@ -396,6 +416,7 @@ private fun List<DraftStep>.areDraftStepsExecutable(packageManager: PackageManag
 
             is DraftWait -> step.isComplete()
             is DraftTap -> step.isComplete()
+            is DraftLockScreen -> true
         }
     }
 }

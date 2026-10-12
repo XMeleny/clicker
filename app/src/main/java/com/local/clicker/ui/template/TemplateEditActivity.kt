@@ -37,6 +37,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.local.clicker.ClickerApp
 import com.local.clicker.domain.DraftOpenApp
+import com.local.clicker.domain.DraftLockScreen
 import com.local.clicker.domain.DraftStep
 import com.local.clicker.domain.DraftTap
 import com.local.clicker.domain.DraftWait
@@ -209,6 +210,7 @@ private fun TemplateEditContent(ui: TemplateEditUi, onSave: () -> Unit, vm: Temp
                             is DraftOpenApp -> pickingApp = step.key
                             is DraftWait -> editingWait = step
                             is DraftTap -> vm?.requestPick(step.key)
+                            is DraftLockScreen -> Unit
                         }
                     },
                     duplicate = { vm?.duplicate(it) },

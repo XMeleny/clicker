@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.local.clicker.domain.DraftOpenApp
+import com.local.clicker.domain.DraftLockScreen
 import com.local.clicker.domain.DraftStep
 import com.local.clicker.domain.DraftTap
 import com.local.clicker.domain.DraftWait
@@ -107,6 +108,7 @@ internal fun StepCard(
             }
             if (expanded) {
                 when (step) {
+                    is DraftLockScreen -> Text("锁屏")
                     is DraftOpenApp -> TextButton(onClick = onPickApp, enabled = !readOnly) { Text(step.summary(apps)) }
                     is DraftWait -> {
                         var waitSeconds by remember(step.key) {

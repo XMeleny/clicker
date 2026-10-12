@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.local.clicker.ClickerApp
 import com.local.clicker.data.TemplateSummary
 import com.local.clicker.domain.DraftOpenApp
+import com.local.clicker.domain.DraftLockScreen
 import com.local.clicker.domain.DraftStep
 import com.local.clicker.domain.DraftTap
 import com.local.clicker.domain.DraftWait
@@ -346,6 +347,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
 }
 
 fun DraftStep.summary(apps: List<AppOption>): String = when (this) {
+    is DraftLockScreen -> "锁屏"
     is DraftOpenApp -> packageName?.let { pkg ->
         "打开 " + (apps.find { it.packageName == pkg }?.label ?: pkg)
     } ?: "打开应用（未选择）"

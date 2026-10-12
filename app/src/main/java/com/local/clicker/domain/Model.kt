@@ -19,6 +19,7 @@ enum class StepKind {
     OPEN_APP,
     WAIT,
     TAP,
+    LOCK_SCREEN,
 }
 
 data class TapPoint(
@@ -56,6 +57,11 @@ data class TapStep(
     val screenWidth: Int,
     val screenHeight: Int,
     val rotation: Int,
+) : Step
+
+data class LockScreenStep(
+    override val id: Long,
+    override val orderIndex: Int,
 ) : Step
 
 sealed interface DraftStep {
@@ -99,6 +105,16 @@ data class DraftTap(
 ) : DraftStep {
     override val kind: StepKind = StepKind.TAP
     override fun isComplete(): Boolean = tap != null && tap.isInside()
+    override fun withIndex(index: Int): DraftStep = copy(orderIndex = index)
+    override fun copyWithKey(key: Long): DraftStep = copy(key = key)
+}
+
+data class DraftLockScreen(
+    override val key: Long,
+    override val orderIndex: Int,
+) : DraftStep {
+    override val kind: StepKind = StepKind.LOCK_SCREEN
+    override fun isComplete(): Boolean = true
     override fun withIndex(index: Int): DraftStep = copy(orderIndex = index)
     override fun copyWithKey(key: Long): DraftStep = copy(key = key)
 }
