@@ -141,7 +141,7 @@ data class TaskSummary(
     val lastMessage: String?,
     val executable: Boolean,
     val steps: List<String> = emptyList(),
-    val wakeForTaskId: Long? = null,
+    val earlyWake: Boolean = false,
 )
 
 data class ExecutionLog(

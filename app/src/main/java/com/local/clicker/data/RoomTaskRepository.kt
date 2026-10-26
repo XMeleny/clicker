@@ -51,7 +51,8 @@ class RoomTaskRepository internal constructor(
     override fun observeTasks(): Flow<List<TaskSummary>> =
         combine(dao.observeTasks(), dao.observeSteps()) { tasks, steps ->
             val byTask = steps.groupBy { it.taskId }
-            tasks.map { task ->
+            val wakeParents = tasks.mapNotNull { it.wakeForTaskId }.toSet()
+            tasks.filter { it.wakeForTaskId == null }.map { task ->
                 val rows = byTask[task.id].orEmpty()
                 TaskSummary(
                     id = task.id,
@@ -60,9 +61,9 @@ class RoomTaskRepository internal constructor(
                     status = task.status.toStatus(),
                     updatedAt = task.updatedAt,
                     lastMessage = task.lastMessage,
-                    executable = task.wakeForTaskId != null || rows.arePersistedStepsExecutable(packageManager),
-                    steps = if (task.wakeForTaskId != null) listOf("唤醒屏幕") else rows.map { it.summary(packageManager) },
-                    wakeForTaskId = task.wakeForTaskId,
+                    executable = rows.arePersistedStepsExecutable(packageManager),
+                    steps = rows.map { it.summary(packageManager) },
+                    earlyWake = task.id in wakeParents,
                 )
             }
         }

@@ -203,6 +203,9 @@ private fun TaskRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(task.name, style = MaterialTheme.typography.titleMedium)
                 Text(task.scheduledAt?.let(::formatWhen) ?: "未设置时间", style = MaterialTheme.typography.bodyMedium)
+                if (task.earlyWake) {
+                    Text("提前 2 分钟唤醒屏幕", style = MaterialTheme.typography.bodySmall)
+                }
                 if (task.steps.isEmpty()) {
                     Text("暂无步骤", style = MaterialTheme.typography.bodySmall)
                 } else {
@@ -223,7 +226,7 @@ private fun TaskRow(
                     ) {
                         Text("立即执行", style = MaterialTheme.typography.bodySmall)
                     }
-                    if (task.status == TaskStatus.SCHEDULED && task.wakeForTaskId == null) {
+                    if (task.status == TaskStatus.SCHEDULED) {
                         OutlinedButton(
                             onClick = onCancel,
                             modifier = Modifier.fillMaxWidth().height(32.dp),
@@ -233,7 +236,7 @@ private fun TaskRow(
                             Text("取消计划", style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    if (task.wakeForTaskId == null) OutlinedButton(
+                    OutlinedButton(
                         onClick = onDelete,
                         modifier = Modifier.fillMaxWidth().height(32.dp),
                         shape = RoundedCornerShape(6.dp),
