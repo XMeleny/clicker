@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -110,6 +111,7 @@ fun TaskEditScreen(
             save = { vm.save(onBack, onReplaced, onAlarmPermissionRequired) },
             setName = vm::setName,
             setScheduledAt = vm::setScheduledAt,
+            setEarlyWake = vm::setEarlyWake,
             move = vm::moveKey,
             remove = vm::remove,
             requestPick = vm::requestPick,
@@ -126,6 +128,7 @@ private data class EditActions(
     val save: () -> Unit,
     val setName: (String) -> Unit,
     val setScheduledAt: (Long?) -> Unit,
+    val setEarlyWake: (Boolean) -> Unit,
     val move: (Long, Int) -> Unit,
     val remove: (Int) -> Unit,
     val requestPick: (Long) -> Unit,
@@ -188,6 +191,17 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
                     ) { Icon(Icons.Default.DeleteOutline, contentDescription = "删除计划时间") }
                 }
             }
+            if (ui.scheduledAt != null && !ui.readOnly) {
+                item {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { actions.setEarlyWake(!ui.earlyWake) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = ui.earlyWake, onCheckedChange = actions.setEarlyWake)
+                        Text("提前 2 分钟唤醒屏幕")
+                    }
+                }
+            }
             actionStepList(
                 steps = ui.steps,
                 apps = ui.apps,
@@ -210,7 +224,7 @@ private fun TaskEditContent(ui: EditUi, busy: Boolean, actions: EditActions) {
             if (ui.taskId > 0L && !ui.readOnly && ScriptLooksExecutable(ui)) {
                 item { Button(onClick = actions.runNow, enabled = !busy) { Text("立即执行") } }
             }
-            if (ui.status == TaskStatus.SCHEDULED) {
+            if (ui.status == TaskStatus.SCHEDULED && !ui.readOnly) {
                 item { TextButton(onClick = actions.cancelSchedule) { Text("取消计划") } }
             }
         }
@@ -296,6 +310,7 @@ private fun TaskEditScreenPreview() {
         save = {},
         setName = {},
         setScheduledAt = {},
+        setEarlyWake = {},
         move = { _, _ -> },
         remove = {},
         requestPick = {},

@@ -34,6 +34,7 @@ data class EditUi(
     val taskId: Long = 0L,
     val name: String = "",
     val scheduledAt: Long? = null,
+    val earlyWake: Boolean = false,
     val steps: List<DraftStep> = emptyList(),
     val expandedKey: Long? = null,
     val status: TaskStatus = TaskStatus.DRAFT,
@@ -68,9 +69,10 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
                         it.copy(
                             name = draft.task.name,
                             scheduledAt = draft.task.scheduledAt,
+                            earlyWake = draft.task.earlyWake,
                             steps = draft.steps,
                             status = draft.task.status,
-                            readOnly = draft.task.status == TaskStatus.RUNNING,
+                            readOnly = draft.task.status == TaskStatus.RUNNING || draft.task.wakeForTaskId != null,
                             loaded = true,
                         )
                     }
@@ -91,7 +93,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
                 _ui.update {
                     it.copy(
                         status = task.status,
-                        readOnly = task.status == TaskStatus.RUNNING,
+                        readOnly = task.status == TaskStatus.RUNNING || task.wakeForTaskId != null,
                     )
                 }
             }
@@ -130,6 +132,11 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
     fun setScheduledAt(value: Long?) {
         if (_ui.value.readOnly) return
         _ui.update { it.copy(scheduledAt = value?.let(::floorToMinute)) }
+    }
+
+    fun setEarlyWake(value: Boolean) {
+        if (_ui.value.readOnly) return
+        _ui.update { it.copy(earlyWake = value) }
     }
 
     fun toggle(key: Long) {
@@ -212,6 +219,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
                 scheduledAt = state.scheduledAt,
                 steps = state.steps,
                 now = System.currentTimeMillis(),
+                earlyWake = state.earlyWake,
             )
             when (result) {
                 is SaveResult.Rejected -> {
@@ -299,6 +307,7 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
             scheduledAt = state.scheduledAt,
             steps = state.steps,
             now = System.currentTimeMillis(),
+            earlyWake = state.earlyWake,
         )
         return when (result) {
             is SaveResult.Rejected -> {

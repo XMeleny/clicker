@@ -83,7 +83,25 @@ class ClickerAccessibilityService : AccessibilityService() {
         keepAwake = view
     }
 
+    private val earlyWakeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var earlyWakeTimeout: Runnable? = null
+
+    fun keepAwakeForEarlyWake() {
+        showKeepAwake()
+        earlyWakeTimeout?.let(earlyWakeHandler::removeCallbacks)
+        earlyWakeTimeout = Runnable {
+            earlyWakeTimeout = null
+            hideKeepAwake()
+        }.also { earlyWakeHandler.postDelayed(it, 150_000L) }
+    }
+
+    fun takeOverEarlyWake() {
+        earlyWakeTimeout?.let(earlyWakeHandler::removeCallbacks)
+        earlyWakeTimeout = null
+    }
+
     fun hideKeepAwake() {
+        takeOverEarlyWake()
         keepAwake?.let { runCatching { windowManager.removeView(it) } }
         keepAwake = null
     }

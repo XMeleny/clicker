@@ -128,6 +128,8 @@ data class TaskRecord(
     val updatedAt: Long,
     val lastRunAt: Long?,
     val lastMessage: String?,
+    val wakeForTaskId: Long? = null,
+    val earlyWake: Boolean = false,
 )
 
 data class TaskSummary(
@@ -139,6 +141,7 @@ data class TaskSummary(
     val lastMessage: String?,
     val executable: Boolean,
     val steps: List<String> = emptyList(),
+    val wakeForTaskId: Long? = null,
 )
 
 data class ExecutionLog(
@@ -189,6 +192,7 @@ const val WAIT_MIN_MS = 100L
 const val WAIT_MAX_MS = 120_000L
 const val MAX_STEPS = 30
 const val GRACE_MS = 30_000L
+const val EARLY_WAKE_MS = 2 * 60 * 1000L
 const val NAME_MAX = 40
 const val RUN_WALL_MS = 10 * 60 * 1000L
 const val WAKE_START_TIMEOUT_MS = 6_000L

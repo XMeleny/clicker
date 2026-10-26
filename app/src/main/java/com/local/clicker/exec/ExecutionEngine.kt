@@ -16,6 +16,20 @@ sealed interface Outcome {
 }
 
 class ExecutionEngine(private val context: Context) {
+    suspend fun wakeOnly(onDiagnostic: (String) -> Unit): Outcome {
+        val service = ClickerAccessibilityService.instance
+            ?: return Outcome.Failed("无障碍服务未开启")
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        if (keyguard.isKeyguardSecure) return Outcome.Failed("设备设有锁屏密码")
+        val failure = service.wakeAndUnlock(onDiagnostic)
+        return if (failure == null) {
+            service.keepAwakeForEarlyWake()
+            Outcome.Success("已提前唤醒屏幕")
+        } else {
+            Outcome.Failed("无法唤醒屏幕：$failure")
+        }
+    }
+
     suspend fun prepare(snapshot: ExecutionSnapshot, onDiagnostic: (String) -> Unit): Outcome? {
         val service = ClickerAccessibilityService.instance
             ?: return Outcome.Failed("无障碍服务未开启")
@@ -31,6 +45,7 @@ class ExecutionEngine(private val context: Context) {
         val keyguard = context.getSystemService(KeyguardManager::class.java)
         onDiagnostic("keyguardSecure=${keyguard.isKeyguardSecure}")
         if (keyguard.isKeyguardSecure) return Outcome.Failed("设备设有锁屏密码")
+        service.takeOverEarlyWake()
         service.showKeepAwake()
         val wakeFailure = service.wakeAndUnlock(onDiagnostic)
         if (wakeFailure != null) {

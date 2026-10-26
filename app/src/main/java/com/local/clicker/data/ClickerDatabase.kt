@@ -15,7 +15,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "tasks")
+@Entity(tableName = "tasks", indices = [Index(value = ["wakeForTaskId"], unique = true)])
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
@@ -25,6 +25,7 @@ data class TaskEntity(
     val updatedAt: Long,
     val lastRunAt: Long?,
     val lastMessage: String?,
+    val wakeForTaskId: Long? = null,
 )
 
 @Entity(
@@ -167,6 +168,9 @@ interface ClickerDao {
     @Query("SELECT * FROM tasks WHERE id = :id")
     suspend fun getTask(id: Long): TaskEntity?
 
+    @Query("SELECT * FROM tasks WHERE wakeForTaskId = :parentId LIMIT 1")
+    suspend fun wakeTask(parentId: Long): TaskEntity?
+
     @Query("SELECT * FROM steps WHERE taskId = :taskId ORDER BY orderIndex ASC")
     suspend fun stepsOf(taskId: Long): List<StepEntity>
 
@@ -209,7 +213,7 @@ interface ClickerDao {
 
 @Database(
     entities = [TaskEntity::class, StepEntity::class, ExecutionLogEntity::class, ActionTemplateEntity::class, TemplateStepEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class ClickerDatabase : RoomDatabase() {
@@ -248,5 +252,12 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `action_templates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL)")
         db.execSQL("""CREATE TABLE IF NOT EXISTS `template_steps` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `templateId` INTEGER NOT NULL, `orderIndex` INTEGER NOT NULL, `type` TEXT NOT NULL, `complete` INTEGER NOT NULL, `packageName` TEXT, `waitMs` INTEGER, `x` INTEGER, `y` INTEGER, `screenWidth` INTEGER, `screenHeight` INTEGER, `rotation` INTEGER, FOREIGN KEY(`templateId`) REFERENCES `action_templates`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)""")
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_template_steps_templateId` ON `template_steps` (`templateId`)")
+    }
+}
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tasks ADD COLUMN wakeForTaskId INTEGER")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_tasks_wakeForTaskId ON tasks (wakeForTaskId)")
     }
 }

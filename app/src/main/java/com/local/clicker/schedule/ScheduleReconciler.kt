@@ -3,6 +3,7 @@ package com.local.clicker.schedule
 import android.content.Context
 import android.os.SystemClock
 import com.local.clicker.domain.GRACE_MS
+import com.local.clicker.domain.EARLY_WAKE_MS
 import com.local.clicker.domain.TaskRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -64,7 +65,9 @@ class TaskCoordinator(
         scheduledAt: Long?,
         steps: List<com.local.clicker.domain.DraftStep>,
         now: Long,
+        earlyWake: Boolean = false,
     ): com.local.clicker.domain.SaveResult {
+        val oldWakeId = id?.let { repository.wakeTaskId(it) }
         val result = repository.save(
             id = id,
             name = name,
@@ -72,22 +75,29 @@ class TaskCoordinator(
             steps = steps,
             now = now,
             allowSchedule = alarms.canSchedule(),
+            earlyWake = earlyWake,
         )
         if (result is com.local.clicker.domain.SaveResult.Saved) {
             if (id != null) alarms.cancel(id)
+            if (oldWakeId != null) alarms.cancel(oldWakeId)
             if (result.status == com.local.clicker.domain.TaskStatus.SCHEDULED && result.scheduledAt != null) {
                 alarms.schedule(result.taskId, result.scheduledAt)
+                repository.wakeTaskId(result.taskId)?.let { wakeId ->
+                    alarms.schedule(wakeId, result.scheduledAt - EARLY_WAKE_MS)
+                }
             }
         }
         return result
     }
 
     suspend fun delete(id: Long) {
+        repository.wakeTaskId(id)?.let { alarms.cancel(it) }
         alarms.cancel(id)
         repository.delete(id)
     }
 
     suspend fun cancelSchedule(id: Long) {
+        repository.wakeTaskId(id)?.let { alarms.cancel(it) }
         alarms.cancel(id)
         repository.cancelSchedule(id)
     }

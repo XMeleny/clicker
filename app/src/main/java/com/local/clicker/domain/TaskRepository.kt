@@ -18,7 +18,10 @@ interface TaskRepository {
         steps: List<DraftStep>,
         now: Long,
         allowSchedule: Boolean,
+        earlyWake: Boolean = false,
     ): SaveResult
+
+    suspend fun wakeTaskId(parentId: Long): Long?
 
     suspend fun delete(id: Long)
 

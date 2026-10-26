@@ -136,6 +136,12 @@ class ClickerRuntimeService : Service() {
             app.graph.alarms.cancel(task.id)
         }
         val engine = ExecutionEngine(this)
+        if (task.wakeForTaskId != null) {
+            repo.markRunning(request.taskId, now)
+            val outcome = engine.wakeOnly { repo.diagnosticEvent(request.taskId, it) }
+            publish(request, snapshot.name, outcome, false, now)
+            return
+        }
         repo.diagnosticEvent(request.taskId, "prepare steps=${snapshot.steps.size}")
         val blocked = engine.prepare(snapshot) { repo.diagnosticEvent(request.taskId, it) }
         if (blocked != null) {

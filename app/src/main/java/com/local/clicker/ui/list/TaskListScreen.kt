@@ -223,7 +223,7 @@ private fun TaskRow(
                     ) {
                         Text("立即执行", style = MaterialTheme.typography.bodySmall)
                     }
-                    if (task.status == TaskStatus.SCHEDULED) {
+                    if (task.status == TaskStatus.SCHEDULED && task.wakeForTaskId == null) {
                         OutlinedButton(
                             onClick = onCancel,
                             modifier = Modifier.fillMaxWidth().height(32.dp),
@@ -233,7 +233,7 @@ private fun TaskRow(
                             Text("取消计划", style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    OutlinedButton(
+                    if (task.wakeForTaskId == null) OutlinedButton(
                         onClick = onDelete,
                         modifier = Modifier.fillMaxWidth().height(32.dp),
                         shape = RoundedCornerShape(6.dp),

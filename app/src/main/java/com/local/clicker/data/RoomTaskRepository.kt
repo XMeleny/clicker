@@ -1,12 +1,14 @@
 package com.local.clicker.data
 
 import android.content.pm.PackageManager
+import androidx.room.withTransaction
 import com.local.clicker.domain.DraftOpenApp
 import com.local.clicker.domain.DraftLockScreen
 import com.local.clicker.domain.DraftStep
 import com.local.clicker.domain.DraftTap
 import com.local.clicker.domain.DraftWait
 import com.local.clicker.domain.ExecutionSnapshot
+import com.local.clicker.domain.EARLY_WAKE_MS
 import com.local.clicker.domain.ExecutionLog
 import com.local.clicker.domain.NAME_MAX
 import com.local.clicker.domain.OpenAppStep
@@ -32,10 +34,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 class RoomTaskRepository internal constructor(
-    private val dao: ClickerDao,
+    private val database: ClickerDatabase,
     private val packageManager: PackageManager,
     private val failureLog: FailureLog,
 ) : TaskRepository {
+    private val dao = database.dao()
 
     fun beginDiagnostic(id: Long, source: String, trial: Boolean, scheduledAt: Long?) =
         failureLog.begin(id, source, trial, scheduledAt)
@@ -57,8 +60,9 @@ class RoomTaskRepository internal constructor(
                     status = task.status.toStatus(),
                     updatedAt = task.updatedAt,
                     lastMessage = task.lastMessage,
-                    executable = rows.arePersistedStepsExecutable(packageManager),
-                    steps = rows.map { it.summary(packageManager) },
+                    executable = task.wakeForTaskId != null || rows.arePersistedStepsExecutable(packageManager),
+                    steps = if (task.wakeForTaskId != null) listOf("唤醒屏幕") else rows.map { it.summary(packageManager) },
+                    wakeForTaskId = task.wakeForTaskId,
                 )
             }
         }
@@ -68,7 +72,7 @@ class RoomTaskRepository internal constructor(
 
     override suspend fun loadDraft(id: Long): TaskDraft? {
         val task = dao.getTask(id) ?: return null
-        return TaskDraft(task.toRecord(), dao.stepsOf(id).map { it.toDraft() })
+        return TaskDraft(task.toRecord().copy(earlyWake = dao.wakeTask(id) != null), dao.stepsOf(id).map { it.toDraft() })
     }
 
     override suspend fun save(
@@ -78,6 +82,7 @@ class RoomTaskRepository internal constructor(
         steps: List<DraftStep>,
         now: Long,
         allowSchedule: Boolean,
+        earlyWake: Boolean,
     ): SaveResult {
         val trimmed = name.trim()
         if (trimmed.isEmpty() || trimmed.length > NAME_MAX) {
@@ -90,8 +95,10 @@ class RoomTaskRepository internal constructor(
         if (scheduledAt != null && scheduledAt <= now) {
             return SaveResult.Rejected("计划时间必须是将来的时间", existing?.scheduledAt)
         }
-
         val executable = steps.areDraftStepsExecutable(packageManager)
+        if (earlyWake && executable && scheduledAt != null && scheduledAt - EARLY_WAKE_MS <= now) {
+            return SaveResult.Rejected("提前唤醒时间必须在将来，请将任务时间设为至少两分钟后", existing?.scheduledAt)
+        }
         if (executable && scheduledAt != null && !allowSchedule) {
             return SaveResult.Rejected("未授予闹钟权限，请先授权", existing?.scheduledAt, requiresAlarmPermission = true)
         }
@@ -103,54 +110,85 @@ class RoomTaskRepository internal constructor(
             !executable -> "还有未完成的步骤，已保存为草稿"
             else -> null
         }
-        val taskId = if (existing == null) {
-            dao.insertTask(
-                TaskEntity(
-                    name = trimmed,
-                    scheduledAt = scheduledAt,
-                    status = status.name,
-                    createdAt = now,
+        return database.withTransaction {
+            val taskId = if (existing == null) {
+                dao.insertTask(
+                    TaskEntity(
+                        name = trimmed,
+                        scheduledAt = scheduledAt,
+                        status = status.name,
+                        createdAt = now,
+                        updatedAt = now,
+                        lastRunAt = null,
+                        lastMessage = notice,
+                    ),
+                )
+            } else {
+                dao.upsertTask(
+                    existing.copy(
+                        name = trimmed,
+                        scheduledAt = scheduledAt,
+                        status = status.name,
+                        updatedAt = now,
+                        lastMessage = notice,
+                    ),
+                )
+                existing.id
+            }
+            dao.replaceSteps(taskId, steps.map { it.toEntity(taskId) })
+            val wake = dao.wakeTask(taskId)
+            if (earlyWake && status == TaskStatus.SCHEDULED && scheduledAt != null) {
+                val companion = TaskEntity(
+                    id = wake?.id ?: 0,
+                    name = "$trimmed-提前唤醒",
+                    scheduledAt = scheduledAt - EARLY_WAKE_MS,
+                    status = TaskStatus.SCHEDULED.name,
+                    createdAt = wake?.createdAt ?: now,
                     updatedAt = now,
-                    lastRunAt = null,
-                    lastMessage = notice,
-                ),
+                    lastRunAt = wake?.lastRunAt,
+                    lastMessage = null,
+                    wakeForTaskId = taskId,
+                )
+                if (wake == null) dao.insertTask(companion) else dao.upsertTask(companion)
+            } else if (wake != null) {
+                dao.deleteTask(wake.id)
+            }
+            SaveResult.Saved(
+                taskId = taskId,
+                status = status,
+                scheduledAt = scheduledAt,
+                leaveEditor = status == TaskStatus.SCHEDULED || (executable && scheduledAt == null),
+                notice = notice,
             )
-        } else {
-            dao.upsertTask(
-                existing.copy(
-                    name = trimmed,
-                    scheduledAt = scheduledAt,
-                    status = status.name,
-                    updatedAt = now,
-                    lastMessage = notice,
-                ),
-            )
-            existing.id
         }
-        dao.replaceSteps(taskId, steps.map { it.toEntity(taskId) })
-        return SaveResult.Saved(
-            taskId = taskId,
-            status = status,
-            scheduledAt = scheduledAt,
-            leaveEditor = status == TaskStatus.SCHEDULED || (executable && scheduledAt == null),
-            notice = notice,
-        )
     }
 
     override suspend fun delete(id: Long) {
-        dao.deleteTask(id)
+        database.withTransaction {
+            dao.wakeTask(id)?.let { dao.deleteTask(it.id) }
+            dao.deleteTask(id)
+        }
     }
 
+    override suspend fun wakeTaskId(parentId: Long): Long? = dao.wakeTask(parentId)?.id
+
     override suspend fun cancelSchedule(id: Long) {
-        val task = dao.getTask(id) ?: return
-        if (task.status.toStatus() != TaskStatus.SCHEDULED) return
-        dao.upsertTask(
-            task.copy(
-                status = TaskStatus.CANCELLED.name,
-                updatedAt = System.currentTimeMillis(),
-                lastMessage = "已取消计划",
-            ),
-        )
+        database.withTransaction {
+            val task = dao.getTask(id) ?: return@withTransaction
+            if (task.status.toStatus() != TaskStatus.SCHEDULED) return@withTransaction
+            dao.upsertTask(
+                task.copy(
+                    status = TaskStatus.CANCELLED.name,
+                    updatedAt = System.currentTimeMillis(),
+                    lastMessage = "已取消计划",
+                ),
+            )
+            dao.wakeTask(id)?.let { wake ->
+                if (wake.status == TaskStatus.SCHEDULED.name) {
+                    dao.upsertTask(wake.copy(status = TaskStatus.CANCELLED.name, updatedAt = System.currentTimeMillis()))
+                }
+            }
+        }
     }
 
     override suspend fun get(id: Long): TaskRecord? = dao.getTask(id)?.toRecord()
@@ -159,7 +197,7 @@ class RoomTaskRepository internal constructor(
         val task = dao.getTask(id) ?: return null
         val steps = dao.stepsOf(id).mapNotNull { it.toStep() }
         val rows = dao.stepsOf(id)
-        if (rows.isEmpty() || steps.size != rows.size) return null
+        if (task.wakeForTaskId == null && (rows.isEmpty() || steps.size != rows.size)) return null
         return ExecutionSnapshot(task.id, task.name, task.status.toStatus(), task.scheduledAt, steps)
     }
 
@@ -266,6 +304,7 @@ private fun TaskEntity.toRecord() = TaskRecord(
     updatedAt = updatedAt,
     lastRunAt = lastRunAt,
     lastMessage = lastMessage,
+    wakeForTaskId = wakeForTaskId,
 )
 
 internal fun StepEntity.summary(packageManager: PackageManager): String = when (StepKind.valueOf(type)) {
