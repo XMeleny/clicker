@@ -317,7 +317,11 @@ internal fun StepEntity.summary(packageManager: PackageManager): String = when (
         "打开 $label"
     } ?: "打开应用（未选择）"
     StepKind.WAIT -> waitMs?.let { "等待 ${formatWaitSeconds(it)} 秒" } ?: "等待（未填写）"
-    StepKind.TAP -> if (x != null && y != null) "点击 ($x, $y)" else "点击（未取点）"
+    StepKind.TAP -> when {
+        x == null || y == null -> "点击（未取点）"
+        endX != null && endY != null -> "范围点击 ($x, $y) ～ ($endX, $endY)"
+        else -> "点击 ($x, $y)"
+    }
     StepKind.LOCK_SCREEN -> "锁屏"
 }
 
@@ -339,7 +343,7 @@ internal fun StepEntity.toDraft(): DraftStep = when (StepKind.valueOf(type)) {
         id,
         orderIndex,
         if (x != null && y != null && screenWidth != null && screenHeight != null && rotation != null) {
-            TapPoint(x, y, screenWidth, screenHeight, rotation)
+            TapPoint(x, y, screenWidth, screenHeight, rotation, endX, endY)
         } else {
             null
         },
@@ -363,8 +367,8 @@ private fun StepEntity.toStep(): Step? {
             if (x == null || y == null || screenWidth == null || screenHeight == null || rotation == null) {
                 null
             } else {
-                val point = TapPoint(x, y, screenWidth, screenHeight, rotation)
-                if (!point.isInside()) null else TapStep(id, orderIndex, x, y, screenWidth, screenHeight, rotation)
+                val point = TapPoint(x, y, screenWidth, screenHeight, rotation, endX, endY)
+                if (!point.isInside()) null else TapStep(id, orderIndex, x, y, screenWidth, screenHeight, rotation, endX, endY)
             }
         }
     }
@@ -430,6 +434,8 @@ internal fun DraftStep.toEntity(taskId: Long): StepEntity {
             screenWidth = tap?.screenWidth,
             screenHeight = tap?.screenHeight,
             rotation = tap?.rotation,
+            endX = tap?.endX,
+            endY = tap?.endY,
         )
     }
 }

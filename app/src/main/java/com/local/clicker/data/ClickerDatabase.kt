@@ -53,6 +53,8 @@ data class StepEntity(
     val screenWidth: Int?,
     val screenHeight: Int?,
     val rotation: Int?,
+    val endX: Int? = null,
+    val endY: Int? = null,
 )
 
 @Entity(tableName = "execution_logs", indices = [Index("taskId")])
@@ -96,6 +98,8 @@ data class TemplateStepEntity(
     val screenWidth: Int?,
     val screenHeight: Int?,
     val rotation: Int?,
+    val endX: Int? = null,
+    val endY: Int? = null,
 )
 
 @Dao
@@ -213,7 +217,7 @@ interface ClickerDao {
 
 @Database(
     entities = [TaskEntity::class, StepEntity::class, ExecutionLogEntity::class, ActionTemplateEntity::class, TemplateStepEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class ClickerDatabase : RoomDatabase() {
@@ -259,5 +263,14 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE tasks ADD COLUMN wakeForTaskId INTEGER")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_tasks_wakeForTaskId ON tasks (wakeForTaskId)")
+    }
+}
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE steps ADD COLUMN endX INTEGER")
+        db.execSQL("ALTER TABLE steps ADD COLUMN endY INTEGER")
+        db.execSQL("ALTER TABLE template_steps ADD COLUMN endX INTEGER")
+        db.execSQL("ALTER TABLE template_steps ADD COLUMN endY INTEGER")
     }
 }

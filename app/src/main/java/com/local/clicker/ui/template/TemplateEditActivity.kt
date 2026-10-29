@@ -1,6 +1,7 @@
 package com.local.clicker.ui.template
 
 import android.app.Application
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -136,9 +137,9 @@ class TemplateEditViewModel(app: Application, private val id: Long) : AndroidVie
     fun updateStep(step: DraftStep) = _ui.update {
         it.copy(steps = ScriptEditor.update(it.steps, step.key, step))
     }
-    fun requestPick(key: Long) {
+    fun requestPick(key: Long, taskId: Int) {
         val service = ClickerAccessibilityService.instance
-        if (service == null) toast("无障碍服务未开启") else service.beginPick(key)
+        if (service == null) toast("无障碍服务未开启") else service.beginPick(key, taskId)
     }
     fun save(onDone: () -> Unit) {
         viewModelScope.launch {
@@ -178,6 +179,7 @@ private fun TemplateEditScreen(id: Long, onDone: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TemplateEditContent(ui: TemplateEditUi, onSave: () -> Unit, vm: TemplateEditViewModel?) {
+    val taskId = (LocalContext.current as? Activity)?.taskId
     var kindTarget by remember { mutableStateOf<Int?>(null) }
     var changeTarget by remember { mutableStateOf<Int?>(null) }
     var pickingApp by remember { mutableStateOf<Long?>(null) }
@@ -209,7 +211,7 @@ private fun TemplateEditContent(ui: TemplateEditUi, onSave: () -> Unit, vm: Temp
                         when (step) {
                             is DraftOpenApp -> pickingApp = step.key
                             is DraftWait -> editingWait = step
-                            is DraftTap -> vm?.requestPick(step.key)
+                            is DraftTap -> if (taskId != null) vm?.requestPick(step.key, taskId)
                             is DraftLockScreen -> Unit
                         }
                     },

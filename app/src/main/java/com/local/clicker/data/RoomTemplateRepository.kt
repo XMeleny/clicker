@@ -86,6 +86,8 @@ private fun TemplateStepEntity.toTaskStep(): StepEntity = StepEntity(
     screenWidth = screenWidth,
     screenHeight = screenHeight,
     rotation = rotation,
+    endX = endX,
+    endY = endY,
 )
 
 private fun TemplateStepEntity.toDraft(): DraftStep = toTaskStep().toDraft()
@@ -105,5 +107,7 @@ private fun DraftStep.toTemplateStep(templateId: Long): TemplateStepEntity {
         screenWidth = taskStep.screenWidth,
         screenHeight = taskStep.screenHeight,
         rotation = taskStep.rotation,
+        endX = taskStep.endX,
+        endY = taskStep.endY,
     )
 }

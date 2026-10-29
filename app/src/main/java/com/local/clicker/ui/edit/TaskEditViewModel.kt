@@ -200,13 +200,13 @@ class TaskEditViewModel(app: Application, private val initialId: Long) : Android
         _ui.update { it.copy(steps = ScriptEditor.update(it.steps, step.key, step), showInvalid = false) }
     }
 
-    fun requestPick(key: Long) {
+    fun requestPick(key: Long, taskId: Int) {
         val service = ClickerAccessibilityService.instance
         if (service == null) {
             _ui.update { it.copy(notice = "无障碍服务未开启") }
             return
         }
-        service.beginPick(key)
+        service.beginPick(key, taskId)
     }
 
     fun save(onLeave: () -> Unit, onReplaced: (Long) -> Unit, onAlarmPermissionRequired: () -> Unit) {
@@ -361,7 +361,10 @@ fun DraftStep.summary(apps: List<AppOption>): String = when (this) {
         "打开 " + (apps.find { it.packageName == pkg }?.label ?: pkg)
     } ?: "打开应用（未选择）"
     is DraftWait -> waitMs?.let { "等待 ${formatWaitSeconds(it)} 秒" } ?: "等待（未填写）"
-    is DraftTap -> tap?.let { "点击 (${it.x}, ${it.y})" } ?: "点击（未取点）"
+    is DraftTap -> tap?.let {
+        if (it.isRange()) "范围点击 (${it.x}, ${it.y}) ～ (${it.endX}, ${it.endY})"
+        else "点击 (${it.x}, ${it.y})"
+    } ?: "点击（未取点）"
 }
 
 fun DraftStep.invalid(apps: List<AppOption>): Boolean = when (this) {

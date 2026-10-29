@@ -1,5 +1,9 @@
 package com.local.clicker.domain
 
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.random.Random
+
 enum class TaskStatus {
     DRAFT,
     SCHEDULED,
@@ -28,8 +32,14 @@ data class TapPoint(
     val screenWidth: Int,
     val screenHeight: Int,
     val rotation: Int,
+    val endX: Int? = null,
+    val endY: Int? = null,
 ) {
-    fun isInside(): Boolean = x in 0 until screenWidth && y in 0 until screenHeight
+    fun isInside(): Boolean = x in 0 until screenWidth && y in 0 until screenHeight &&
+        (endX == null && endY == null ||
+            endX != null && endY != null && endX in 0 until screenWidth && endY in 0 until screenHeight)
+
+    fun isRange(): Boolean = endX != null && endY != null
 }
 
 sealed interface Step {
@@ -57,7 +67,15 @@ data class TapStep(
     val screenWidth: Int,
     val screenHeight: Int,
     val rotation: Int,
-) : Step
+    val endX: Int? = null,
+    val endY: Int? = null,
+) : Step {
+    fun pickCoordinate(random: Random = Random.Default): Pair<Int, Int> =
+        Pair(
+            endX?.let { random.nextInt(min(x, it), max(x, it) + 1) } ?: x,
+            endY?.let { random.nextInt(min(y, it), max(y, it) + 1) } ?: y,
+        )
+}
 
 data class LockScreenStep(
     override val id: Long,

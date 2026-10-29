@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,7 +115,7 @@ fun TaskEditScreen(
             setEarlyWake = vm::setEarlyWake,
             move = vm::moveKey,
             remove = vm::remove,
-            requestPick = vm::requestPick,
+            requestPick = { vm.requestPick(it, (context as Activity).taskId) },
             updateStep = vm::updateStep,
             add = vm::add,
             selectTemplate = vm::selectTemplate,

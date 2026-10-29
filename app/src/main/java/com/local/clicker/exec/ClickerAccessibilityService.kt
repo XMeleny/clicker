@@ -2,8 +2,12 @@ package com.local.clicker.exec
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.app.ActivityManager
 import android.content.Intent
 import android.graphics.Path
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.PixelFormat
 import android.os.SystemClock
 import android.util.Log
@@ -11,6 +15,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.FrameLayout
@@ -30,12 +35,16 @@ import com.local.clicker.domain.WaitStep
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.random.Random
 
 class ClickerAccessibilityService : AccessibilityService() {
     private val windowManager by lazy { getSystemService(WindowManager::class.java) }
     private var keepAwake: View? = null
     private var pickView: View? = null
     private var pickKey: Long? = null
+    private var pickTaskId: Int? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -179,8 +188,11 @@ class ClickerAccessibilityService : AccessibilityService() {
         if (instance == null) return "无障碍服务已断开"
         return when (step) {
             is OpenAppStep -> openApp(step.packageName, cancelled)
-            is WaitStep -> waitFor(step.waitMs, cancelled, startedAt)
-            is TapStep -> tap(step.x, step.y)
+            is WaitStep -> waitFor(step.waitMs + Random.nextLong(1L, 2_001L), cancelled, startedAt)
+            is TapStep -> {
+                val (x, y) = step.pickCoordinate()
+                tap(x, y)
+            }
             is LockScreenStep -> lockScreen(cancelled)
         }
     }
@@ -196,8 +208,9 @@ class ClickerAccessibilityService : AccessibilityService() {
         return if (screenReady()) "锁屏后屏幕仍处于解锁状态" else null
     }
 
-    fun beginPick(stepKey: Long) {
+    fun beginPick(stepKey: Long, taskId: Int) {
         pickKey = stepKey
+        pickTaskId = taskId
         showBubble()
     }
 
@@ -295,15 +308,13 @@ class ClickerAccessibilityService : AccessibilityService() {
         removePickView()
         val root = FrameLayout(this).apply {
             setBackgroundColor(0x66000000)
-            setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_UP) {
-                    deliverPick(event.rawX.toInt(), event.rawY.toInt())
-                }
-                true
-            }
         }
+        root.addView(PickSurface(), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT,
+        ))
         val hint = TextView(this).apply {
-            text = "点击要记录的位置"
+            text = "轻触取点，长按拖动框选范围"
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 18f
         }
@@ -338,13 +349,78 @@ class ClickerAccessibilityService : AccessibilityService() {
         pickView = root
     }
 
-    private fun deliverPick(x: Int, y: Int) {
+    private inner class PickSurface : View(this) {
+        private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x551F6FEB }
+        private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            style = Paint.Style.STROKE
+            strokeWidth = 2 * resources.displayMetrics.density
+        }
+        private var startX = 0f
+        private var startY = 0f
+        private var currentX = 0f
+        private var currentY = 0f
+        private var rawStartX = 0
+        private var rawStartY = 0
+        private var longPressed = false
+        private val activate = Runnable { longPressed = true; invalidate() }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    startY = event.y
+                    currentX = event.x
+                    currentY = event.y
+                    rawStartX = event.rawX.toInt()
+                    rawStartY = event.rawY.toInt()
+                    longPressed = false
+                    postDelayed(activate, ViewConfiguration.getLongPressTimeout().toLong())
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    currentX = event.x
+                    currentY = event.y
+                    if (longPressed) invalidate()
+                }
+                MotionEvent.ACTION_UP -> {
+                    removeCallbacks(activate)
+                    val screen = liveScreen()
+                    val endX = event.rawX.toInt().coerceIn(0, screen.width - 1)
+                    val endY = event.rawY.toInt().coerceIn(0, screen.height - 1)
+                    val point = if (longPressed) {
+                        TapPoint(rawStartX.coerceIn(0, screen.width - 1), rawStartY.coerceIn(0, screen.height - 1),
+                            screen.width, screen.height, screen.rotation, endX, endY)
+                    } else {
+                        TapPoint(endX, endY, screen.width, screen.height, screen.rotation)
+                    }
+                    deliverPick(point)
+                }
+                MotionEvent.ACTION_CANCEL -> removeCallbacks(activate)
+            }
+            return true
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            if (!longPressed) return
+            val bounds = RectF(min(startX, currentX), min(startY, currentY),
+                max(startX, currentX), max(startY, currentY))
+            canvas.drawRect(bounds, fill)
+            canvas.drawRect(bounds, outline)
+        }
+
+        override fun onDetachedFromWindow() {
+            removeCallbacks(activate)
+            super.onDetachedFromWindow()
+        }
+    }
+
+    private fun deliverPick(point: TapPoint) {
         val key = pickKey
-        val screen = liveScreen()
         removePickView()
         pickKey = null
         if (key != null) {
-            PickerBus.tryPoint(key, TapPoint(x, y, screen.width, screen.height, screen.rotation))
+            PickerBus.tryPoint(key, point)
         }
         bringSelfToFront()
     }
@@ -356,9 +432,11 @@ class ClickerAccessibilityService : AccessibilityService() {
     }
 
     private fun bringSelfToFront() {
-        val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return
-        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        startActivity(launch)
+        val taskId = pickTaskId ?: return
+        pickTaskId = null
+        getSystemService(ActivityManager::class.java).appTasks
+            .firstOrNull { it.taskInfo.taskId == taskId }
+            ?.moveToFront()
     }
 
     private fun removePickView() {

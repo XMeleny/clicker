@@ -8,6 +8,7 @@ import com.local.clicker.data.FailureLog
 import com.local.clicker.data.MIGRATION_1_2
 import com.local.clicker.data.MIGRATION_2_3
 import com.local.clicker.data.MIGRATION_3_4
+import com.local.clicker.data.MIGRATION_4_5
 import com.local.clicker.data.RoomTaskRepository
 import com.local.clicker.data.RoomTemplateRepository
 import com.local.clicker.exec.Notifier
@@ -37,7 +38,7 @@ class AppGraph(context: Context) {
         appContext,
         ClickerDatabase::class.java,
         "clicker.db",
-    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
     val repository = RoomTaskRepository(database, appContext.packageManager, FailureLog(appContext.filesDir))
     val templates = RoomTemplateRepository(database.dao(), appContext.packageManager)
     val alarms = AlarmScheduler(appContext)

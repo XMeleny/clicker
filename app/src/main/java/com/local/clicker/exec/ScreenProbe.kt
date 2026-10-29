@@ -31,6 +31,6 @@ fun Step.shortLabel(context: Context): String = when (this) {
         "打开 $label"
     }
     is WaitStep -> "等待 ${formatWaitSeconds(waitMs)} 秒"
-    is TapStep -> "点击 ($x,$y)"
+    is TapStep -> if (endX != null && endY != null) "范围点击 ($x,$y) ～ ($endX,$endY)" else "点击 ($x,$y)"
     is LockScreenStep -> "锁屏"
 }

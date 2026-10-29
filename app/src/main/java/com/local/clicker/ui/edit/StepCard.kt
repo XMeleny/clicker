@@ -125,7 +125,11 @@ internal fun StepCard(
                     }
                     is DraftTap -> {
                         val point = step.tap
-                        Text(if (point == null) "点击?" else "点击 (${point.x}, ${point.y})  ${point.screenWidth}×${point.screenHeight} / ${point.rotation}")
+                        Text(when {
+                            point == null -> "点击?"
+                            point.isRange() -> "范围点击 (${point.x}, ${point.y}) ～ (${point.endX}, ${point.endY})  ${point.screenWidth}×${point.screenHeight} / ${point.rotation}"
+                            else -> "点击 (${point.x}, ${point.y})  ${point.screenWidth}×${point.screenHeight} / ${point.rotation}"
+                        })
                         if (!readOnly) TextButton(onClick = onPick) { Text("选取坐标") }
                     }
                 }
